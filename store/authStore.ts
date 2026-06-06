@@ -2,8 +2,7 @@ import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
 import { authService } from '../services/authService';
 import { notificationService } from '../services/notificationService';
-
-const USER_KEY = 'auth_user';
+import { USER_STORAGE_KEY } from '../constants/config';
 
 interface User {
   id: number;
@@ -36,12 +35,12 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ isLoading: true, error: null });
     try {
       const data = await authService.login({ email, password });
-      await SecureStore.setItemAsync(USER_KEY, JSON.stringify(data.user));
+      await SecureStore.setItemAsync(USER_STORAGE_KEY, JSON.stringify(data.user));
       set({ user: data.user, isAuthenticated: true, isLoading: false });
       notificationService.registerDeviceToken();
     } catch (err: any) {
       set({
-        error: err.response?.data?.error?.message || err.response?.data?.message || 'Login failed. Check credentials.',
+        error: err.response?.data?.message || 'Login failed. Check credentials.',
         isLoading: false,
       });
     }
@@ -56,7 +55,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         password,
         password_confirmation: passwordConfirmation,
       });
-      await SecureStore.setItemAsync(USER_KEY, JSON.stringify(data.user));
+      await SecureStore.setItemAsync(USER_STORAGE_KEY, JSON.stringify(data.user));
       set({ user: data.user, isAuthenticated: true, isLoading: false });
       notificationService.registerDeviceToken();
     } catch (err: any) {
@@ -70,17 +69,18 @@ export const useAuthStore = create<AuthState>((set) => ({
   logout: async () => {
     await notificationService.deregisterDeviceToken();
     await authService.logout();
-    await SecureStore.deleteItemAsync(USER_KEY);
+    await SecureStore.deleteItemAsync(USER_STORAGE_KEY);
     set({ user: null, isAuthenticated: false });
   },
 
   checkAuth: async () => {
-    const token = await authService.getStoredToken();
+    // Session is valid if the Estimator token exists (primary auth source)
+    const token = await authService.getStoredEstimatorToken();
     if (!token) {
       set({ isAuthenticated: false });
       return;
     }
-    const raw = await SecureStore.getItemAsync(USER_KEY);
+    const raw = await SecureStore.getItemAsync(USER_STORAGE_KEY);
     const user = raw ? JSON.parse(raw) : null;
     set({ user, isAuthenticated: true });
     notificationService.registerDeviceToken();
