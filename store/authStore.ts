@@ -1,6 +1,9 @@
 import { create } from 'zustand';
+import * as SecureStore from 'expo-secure-store';
 import { authService } from '../services/authService';
 import { notificationService } from '../services/notificationService';
+
+const USER_KEY = 'auth_user';
 
 interface User {
   id: number;
@@ -33,6 +36,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ isLoading: true, error: null });
     try {
       const data = await authService.login({ email, password });
+      await SecureStore.setItemAsync(USER_KEY, JSON.stringify(data.user));
       set({ user: data.user, isAuthenticated: true, isLoading: false });
       notificationService.registerDeviceToken();
     } catch (err: any) {
@@ -52,6 +56,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         password,
         password_confirmation: passwordConfirmation,
       });
+      await SecureStore.setItemAsync(USER_KEY, JSON.stringify(data.user));
       set({ user: data.user, isAuthenticated: true, isLoading: false });
       notificationService.registerDeviceToken();
     } catch (err: any) {
@@ -65,6 +70,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   logout: async () => {
     await notificationService.deregisterDeviceToken();
     await authService.logout();
+    await SecureStore.deleteItemAsync(USER_KEY);
     set({ user: null, isAuthenticated: false });
   },
 
@@ -74,7 +80,9 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ isAuthenticated: false });
       return;
     }
-    set({ isAuthenticated: true });
+    const raw = await SecureStore.getItemAsync(USER_KEY);
+    const user = raw ? JSON.parse(raw) : null;
+    set({ user, isAuthenticated: true });
     notificationService.registerDeviceToken();
   },
 
