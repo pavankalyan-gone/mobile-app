@@ -126,6 +126,20 @@ export interface GetLeadsParams {
   limit?: number;
 }
 
+const translateReminder = (r: any): Reminder => ({
+  id: Number(r.id),
+  rel_id: r.rel_id,
+  rel_type: r.rel_type,
+  description: r.description || '',
+  date: r.date || '',
+  staff: r.staff,
+  notify_by_email: r.notify_by_email,
+  creator: r.creator,
+  isnotified: r.isnotified,
+  staff_name: r.staff_name || '',
+  is_notified: typeof r.is_notified === 'number' ? r.is_notified : Number(r.isnotified),
+});
+
 const translateLead = (raw: any): Lead => ({
   id: Number(raw.id),
   name: raw.name || '',
@@ -190,20 +204,6 @@ const translateLeadDetail = (raw: any, rest: any): LeadDetail => ({
     default_value: f.default_value,
   })),
   custom_field_values: rest.custom_field_values || {},
-});
-
-const translateReminder = (r: any): Reminder => ({
-  id: Number(r.id),
-  rel_id: r.rel_id,
-  rel_type: r.rel_type,
-  description: r.description || '',
-  date: r.date || '',
-  staff: r.staff,
-  notify_by_email: r.notify_by_email,
-  creator: r.creator,
-  isnotified: r.isnotified,
-  staff_name: r.staff_name || '',
-  is_notified: typeof r.is_notified === 'number' ? r.is_notified : Number(r.isnotified),
 });
 
 export const leadsService = {
