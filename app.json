@@ -7,7 +7,9 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.yourcompany.mobileapp",
+      "buildNumber": "1"
     },
     "android": {
       "adaptiveIcon": {
@@ -16,10 +18,32 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.yourcompany.mobileapp",
+      "versionCode": 1
     },
+    "scheme": "mobileapp",
     "web": {
+      "bundler": "metro",
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-web-browser",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#6750A4",
+          "androidMode": "default"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "dummy-project-id"
+      }
     }
   }
 }
