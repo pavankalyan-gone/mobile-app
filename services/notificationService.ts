@@ -59,12 +59,23 @@ export const notificationService = {
     if (!token) return;
 
     try {
-      await api.post('/device-tokens', {
+      await api.post('/devices/register', {
         token,
         platform: Platform.OS,
       });
     } catch (error) {
       console.error('Failed to register device token with backend:', error);
+    }
+  },
+
+  deregisterDeviceToken: async (): Promise<void> => {
+    const token = await notificationService.getExpoPushToken();
+    if (!token) return;
+
+    try {
+      await api.post('/devices/deregister', { token });
+    } catch (error) {
+      console.error('Failed to deregister device token:', error);
     }
   },
 };
