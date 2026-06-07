@@ -283,6 +283,6 @@ export const leadsService = {
       active: f.active,
       bs_column: f.bs_column,
       default_value: f.default_value,
-    })),
+    }));
   },
 };
