@@ -40,7 +40,7 @@ export const useUpdateLead = () => {
 export const useUpdateLeadStatus = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, status }: { id: number; status: number }) =>
+    mutationFn: ({ id, status }: { id: number; status: number | string }) =>
       leadsService.updateStatus(id, status),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['leads'] });

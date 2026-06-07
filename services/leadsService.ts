@@ -31,6 +31,7 @@ export interface LeadDetail extends Lead {
   activity_log: ActivityLogEntry[];
   custom_fields: CustomFieldDefinition[];
   custom_field_values: Record<string, string>;
+  tags: string[];
 }
 
 export interface LeadNote {
@@ -114,7 +115,7 @@ export interface AddReminderPayload {
 }
 
 export interface GetLeadsParams {
-  status?: number;
+  status?: number | string;
   source?: number;
   assigned?: number | 'me';
   search?: string;
@@ -166,6 +167,9 @@ const translateLeadDetail = (raw: any, rest: any): LeadDetail => ({
   country: raw.country || '',
   website: raw.website || '',
   hash: raw.hash || '',
+  tags: typeof rest.tags === 'string'
+    ? rest.tags.split(',').map((t: string) => t.trim()).filter(Boolean)
+    : (Array.isArray(rest.tags) ? rest.tags : []),
   notes: (rest.notes || []).map((n: any): LeadNote => ({
     id: Number(n.id),
     rel_id: n.rel_id,
@@ -207,10 +211,10 @@ const translateLeadDetail = (raw: any, rest: any): LeadDetail => ({
 });
 
 export const leadsService = {
-  getAll: async (params?: GetLeadsParams): Promise<{ leads: Lead[]; page: number }> => {
+  getAll: async (params?: GetLeadsParams): Promise<{ leads: Lead[]; page: number; total: number }> => {
     const { data: wrapper } = await perfexApi.get<any>('/leads', { params });
     const raw = wrapper.data || [];
-    return { leads: raw.map(translateLead), page: params?.page || 1 };
+    return { leads: raw.map(translateLead), page: params?.page || 1, total: raw.length };
   },
 
   getById: async (id: number): Promise<LeadDetail> => {
@@ -229,7 +233,7 @@ export const leadsService = {
     return wrapper.data;
   },
 
-  updateStatus: async (id: number, status: number): Promise<{ message: string }> => {
+  updateStatus: async (id: number, status: number | string): Promise<{ message: string }> => {
     const { data: wrapper } = await perfexApi.post<any>(`/leads/${id}/status`, { status });
     return wrapper.data;
   },

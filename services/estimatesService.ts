@@ -23,10 +23,33 @@ export interface Estimate {
   expiry_date: string;
   created_by: number;
   created_at?: string;
+  lead_name?: string;
+  valid_until: string;
+  total: number;
+}
+
+export interface EstimateDetailItem {
+  id: number;
+  description: string;
+  qty: number;
+  rate: number;
+  amount: number;
 }
 
 export interface EstimateDetail extends Estimate {
   sections: EstimateSection[];
+  items: EstimateDetailItem[];
+  subtotal: number;
+  pdf_url: string | null;
+  lead_id: number | null;
+}
+
+export interface EstimatesResponse {
+  current_page: number;
+  data: Estimate[];
+  total: number;
+  per_page: number;
+  last_page: number;
 }
 
 export interface Comment {
@@ -51,12 +74,12 @@ export interface PostCommentPayload {
 }
 
 export const estimatesService = {
-  getAll: async (params?: { status?: string; client_id?: number; page?: number }) => {
+  getAll: async (params?: { status?: string; client_id?: number; page?: number }): Promise<EstimatesResponse> => {
     const { data } = await estimatorApi.get('/estimates', { params });
-    return data as { current_page: number; data: Estimate[] };
+    return data as EstimatesResponse;
   },
 
-  getById: async (id: number) => {
+  getById: async (id: number): Promise<EstimateDetail> => {
     const { data } = await estimatorApi.get(`/estimates/${id}`);
     return data as EstimateDetail;
   },

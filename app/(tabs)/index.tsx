@@ -25,7 +25,7 @@ export default function DashboardScreen() {
   const isEstimatesLoading = estimatesQuery.isLoading;
 
   const leads = leadsQuery.data?.leads?.slice(0, 5) || [];
-  const estimates = estimatesQuery.data?.estimates?.slice(0, 5) || [];
+  const estimates = estimatesQuery.data?.data?.slice(0, 5) || [];
 
   const formatTodayDate = () => {
     const date = new Date();
