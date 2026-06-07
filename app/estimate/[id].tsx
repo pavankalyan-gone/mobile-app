@@ -45,6 +45,8 @@ export default function EstimateDetailScreen() {
     if (normalized === 'accepted') return { backgroundColor: '#D1FAE5', color: '#065F46' };
     if (normalized === 'declined') return { backgroundColor: '#FEE2E2', color: '#991B1B' };
     if (normalized === 'expired') return { backgroundColor: '#FEF3C7', color: '#92400E' };
+    if (normalized === 'approved') return { backgroundColor: '#D1FAE5', color: '#065F46' };
+    if (normalized === 'waiting_approval' || normalized === 'pending_approval') return { backgroundColor: '#FEF3C7', color: '#92400E' };
     
     return { backgroundColor: '#F3F4F6', color: '#374151' };
   };

@@ -289,4 +289,12 @@ export const leadsService = {
       default_value: f.default_value,
     }));
   },
+
+  getStatuses: async (): Promise<{ id: number; name: string }[]> => {
+    const { data: wrapper } = await perfexApi.get<any>('/lead_statuses');
+    return (wrapper.data || []).map((s: any) => ({
+      id: Number(s.id),
+      name: s.name,
+    }));
+  },
 };

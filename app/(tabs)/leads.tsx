@@ -3,17 +3,9 @@ import { FlatList, View, StyleSheet, RefreshControl, ScrollView, TouchableOpacit
 import { Searchbar, ActivityIndicator, Chip, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, Stack } from 'expo-router';
-import { useLeads } from '../../hooks/useLeads';
+import { useLeads, useLeadStatuses } from '../../hooks/useLeads';
 import { LeadCard } from '../../components/leads/LeadCard';
 import { EmptyState } from '../../components/ui/EmptyState';
-
-const FILTER_CHIPS = [
-  { label: 'All', value: '' },
-  { label: 'New', value: 'new' },
-  { label: 'Contacted', value: 'contacted' },
-  { label: 'Qualified', value: 'qualified' },
-  { label: 'Lost', value: 'lost' },
-];
 
 export default function LeadsScreen() {
   const router = useRouter();
@@ -36,6 +28,8 @@ export default function LeadsScreen() {
     status: statusFilter || undefined,
     page: 1,
   });
+
+  const { data: statuses } = useLeadStatuses();
 
   const handleClearFilters = () => {
     setSearch('');
@@ -69,18 +63,28 @@ export default function LeadsScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.chipsScroll}
         >
-          {FILTER_CHIPS.map((chip) => {
-            const isSelected = statusFilter === chip.value;
+          <Chip
+            key="all"
+            mode={statusFilter === '' ? 'flat' : 'outlined'}
+            selected={statusFilter === ''}
+            onPress={() => setStatusFilter('')}
+            style={statusFilter === '' ? styles.chipSelected : styles.chipUnselected}
+            textStyle={statusFilter === '' ? styles.chipTextSelected : styles.chipTextUnselected}
+          >
+            All
+          </Chip>
+          {statuses?.map((status) => {
+            const isSelected = statusFilter === String(status.id);
             return (
               <Chip
-                key={chip.label}
+                key={status.id}
                 mode={isSelected ? 'flat' : 'outlined'}
                 selected={isSelected}
-                onPress={() => setStatusFilter(chip.value)}
+                onPress={() => setStatusFilter(String(status.id))}
                 style={isSelected ? styles.chipSelected : styles.chipUnselected}
                 textStyle={isSelected ? styles.chipTextSelected : styles.chipTextUnselected}
               >
-                {chip.label}
+                {status.name}
               </Chip>
             );
           })}

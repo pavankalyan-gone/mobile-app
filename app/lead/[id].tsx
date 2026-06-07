@@ -3,13 +3,14 @@ import { View, ScrollView, StyleSheet, TouchableOpacity, Linking } from 'react-n
 import { Text, Chip, Divider, ActivityIndicator, Menu } from 'react-native-paper';
 import { useLocalSearchParams, Stack } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useLead, useLeadReminders, useUpdateLeadStatus } from '../../hooks/useLeads';
+import { useLead, useLeadReminders, useUpdateLeadStatus, useLeadStatuses } from '../../hooks/useLeads';
 import { EmptyState } from '../../components/ui/EmptyState';
 
 export default function LeadDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data: lead, isLoading } = useLead(Number(id));
   const { data: reminders } = useLeadReminders(Number(id));
+  const { data: statuses } = useLeadStatuses();
   const updateStatusMutation = useUpdateLeadStatus();
 
   const [menuVisible, setMenuVisible] = useState(false);
@@ -52,8 +53,8 @@ export default function LeadDetailScreen() {
     // Fallback checks
     if (normalized.includes('new')) return { backgroundColor: '#DBEAFE', color: '#1E40AF' };
     if (normalized.includes('contact')) return { backgroundColor: '#FEF3C7', color: '#92400E' };
-    if (normalized.includes('qualif')) return { backgroundColor: '#D1FAE5', color: '#065F46' };
-    if (normalized.includes('lost')) return { backgroundColor: '#FEE2E2', color: '#991B1B' };
+    if (normalized.includes('qualif') || normalized.includes('custom') || normalized.includes('accept')) return { backgroundColor: '#D1FAE5', color: '#065F46' };
+    if (normalized.includes('lost') || normalized.includes('junk') || normalized.includes('declin') || normalized.includes('expir')) return { backgroundColor: '#FEE2E2', color: '#991B1B' };
     
     return { backgroundColor: '#F3F4F6', color: '#374151' };
   };
@@ -63,11 +64,11 @@ export default function LeadDetailScreen() {
   const openMenu = () => setMenuVisible(true);
   const closeMenu = () => setMenuVisible(false);
 
-  const handleStatusSelect = (selectedStatus: string) => {
+  const handleStatusSelect = (statusId: number, statusName: string) => {
     closeMenu();
-    setLocalStatus(selectedStatus);
+    setLocalStatus(statusName);
     updateStatusMutation.mutate(
-      { id: lead.id, status: selectedStatus },
+      { id: lead.id, status: statusId },
       {
         onError: (err) => {
           console.error('Failed to update status:', err);
@@ -125,10 +126,13 @@ export default function LeadDetailScreen() {
             </Chip>
           }
         >
-          <Menu.Item onPress={() => handleStatusSelect('new')} title="New" />
-          <Menu.Item onPress={() => handleStatusSelect('contacted')} title="Contacted" />
-          <Menu.Item onPress={() => handleStatusSelect('qualified')} title="Qualified" />
-          <Menu.Item onPress={() => handleStatusSelect('lost')} title="Lost" />
+          {statuses?.map((s) => (
+            <Menu.Item
+              key={s.id}
+              onPress={() => handleStatusSelect(s.id, s.name)}
+              title={s.name}
+            />
+          ))}
         </Menu>
       </View>
       <Divider />

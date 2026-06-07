@@ -108,3 +108,10 @@ export const useLeadCustomFields = (type: string = 'leads') =>
     queryFn: () => leadsService.getCustomFields(type),
     staleTime: 1000 * 60 * 10,
   });
+
+export const useLeadStatuses = () =>
+  useQuery({
+    queryKey: ['lead-statuses'],
+    queryFn: () => leadsService.getStatuses(),
+    staleTime: 1000 * 60 * 10,
+  });

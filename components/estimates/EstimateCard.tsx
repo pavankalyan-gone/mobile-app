@@ -13,6 +13,9 @@ const statusColor: Record<string, string> = {
   accepted: '#c8e6c9',
   declined: '#ffcdd2',
   expired: '#ffe0b2',
+  approved: '#c8e6c9',
+  waiting_approval: '#ffe0b2',
+  pending_approval: '#ffe0b2',
 };
 
 const statusTextColor: Record<string, string> = {
@@ -21,6 +24,9 @@ const statusTextColor: Record<string, string> = {
   accepted: '#1b5e20',
   declined: '#b71c1c',
   expired: '#e65100',
+  approved: '#1b5e20',
+  waiting_approval: '#e65100',
+  pending_approval: '#e65100',
 };
 
 export function EstimateCard({ estimate, onPress }: Props) {
