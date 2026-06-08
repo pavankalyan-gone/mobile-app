@@ -6,17 +6,25 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuthStore } from '../../store/authStore';
 import { useLeads } from '../../hooks/useLeads';
 import { useEstimates } from '../../hooks/useEstimates';
+import { useReminders } from '../../hooks/useReminders';
 import { LeadCard } from '../../components/leads/LeadCard';
 import { EstimateCard } from '../../components/estimates/EstimateCard';
+import { theme } from '../../constants/theme';
 
 export default function DashboardScreen() {
   const router = useRouter();
   const { user, logout } = useAuthStore();
 
   const leadsQuery = useLeads({ page: 1 });
-  const estimatesQuery = useEstimates({ status: 'sent' });
+  const estimatesQuery = useEstimates();
+  const remindersQuery = useReminders();
 
   const isLoading = leadsQuery.isLoading && estimatesQuery.isLoading;
+
+  const today = new Date().toDateString();
+  const dueTodayCount = remindersQuery.data?.filter(
+    (r) => new Date(r.due_date).toDateString() === today && !r.is_read
+  ).length ?? 0;
 
   const totalLeads = leadsQuery.data?.total;
   const isLeadsLoading = leadsQuery.isLoading;
@@ -44,10 +52,14 @@ export default function DashboardScreen() {
     <SafeAreaView style={styles.container}>
       <Stack.Screen
         options={{
+          headerShown: true,
           title: 'Dashboard',
+          headerTitleStyle: { ...theme.typography.headlineMd, color: theme.colors.primary },
+          headerStyle: { backgroundColor: theme.colors.background },
+          headerShadowVisible: false,
           headerRight: () => (
             <TouchableOpacity onPress={logout} style={styles.logoutButton}>
-              <MaterialCommunityIcons name="logout" size={24} color="#6750A4" />
+              <MaterialCommunityIcons name="logout" size={24} color={theme.colors.primary} />
             </TouchableOpacity>
           ),
         }}
@@ -61,35 +73,39 @@ export default function DashboardScreen() {
 
         {isLoading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#6750A4" />
+            <ActivityIndicator size="large" color={theme.colors.primary} />
           </View>
         ) : (
           <>
-            {/* Summary Cards */}
+            {/* Summary Cards Row */}
             <View style={styles.statsRow}>
               {/* Card 1 — Total Leads */}
-              <View style={[styles.card, { backgroundColor: '#EDE9FE' }]}>
+              <View style={[styles.card, { backgroundColor: '#cfebba' }]}>
                 {isLeadsLoading ? (
-                  <ActivityIndicator size="small" color="#6750A4" />
+                  <ActivityIndicator size="small" color={theme.colors.primary} />
                 ) : (
                   <Text style={styles.cardValue}>{totalLeads ?? 0}</Text>
                 )}
                 <Text style={styles.cardLabel}>Total Leads</Text>
               </View>
 
-              {/* Card 2 — Pending Estimates */}
-              <View style={[styles.card, { backgroundColor: '#E0F2FE' }]}>
+              {/* Card 2 — Total Estimates */}
+              <View style={[styles.card, { backgroundColor: '#b2f746' }]}>
                 {isEstimatesLoading ? (
-                  <ActivityIndicator size="small" color="#6750A4" />
+                  <ActivityIndicator size="small" color={theme.colors.primary} />
                 ) : (
                   <Text style={styles.cardValue}>{pendingEstimates ?? 0}</Text>
                 )}
-                <Text style={styles.cardLabel}>Pending Est.</Text>
+                <Text style={styles.cardLabel}>Estimates</Text>
               </View>
 
               {/* Card 3 — Due Today */}
-              <View style={[styles.card, { backgroundColor: '#ffffff' }]}>
-                <Text style={styles.cardValue}>0</Text>
+              <View style={[styles.card, { backgroundColor: '#ffd8ed' }]}>
+                {remindersQuery.isLoading ? (
+                  <ActivityIndicator size="small" color={theme.colors.primary} />
+                ) : (
+                  <Text style={styles.cardValue}>{dueTodayCount}</Text>
+                )}
                 <Text style={styles.cardLabel}>Due Today</Text>
               </View>
             </View>
@@ -145,27 +161,27 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f8f8',
+    backgroundColor: theme.colors.background,
   },
   scrollContent: {
-    paddingBottom: 24,
+    paddingBottom: theme.spacing.gapLg,
   },
   logoutButton: {
-    marginRight: 16,
+    marginRight: theme.spacing.paddingX,
   },
   header: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 12,
+    paddingHorizontal: theme.spacing.margin,
+    paddingTop: theme.spacing.gapMd,
+    paddingBottom: theme.spacing.gapSm,
   },
   greeting: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
+    ...theme.typography.headlineLg,
+    color: theme.colors.primary,
+    fontWeight: '700',
   },
   date: {
-    fontSize: 14,
-    color: '#666666',
+    ...theme.typography.labelSm,
+    color: theme.colors.textMuted,
     marginTop: 4,
   },
   loadingContainer: {
@@ -176,60 +192,60 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     flexDirection: 'row',
-    gap: 10,
-    marginHorizontal: 16,
-    marginBottom: 24,
+    gap: theme.spacing.gapSm,
+    marginHorizontal: theme.spacing.margin,
+    marginVertical: theme.spacing.gapMd,
   },
   card: {
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: theme.roundness.xl,
+    padding: theme.spacing.paddingX,
     flex: 1,
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    minHeight: 90,
-    borderWidth: 0.5,
-    borderColor: '#e0e0e0',
-    elevation: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
+    minHeight: 96,
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
+    shadowColor: theme.colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.02,
+    shadowRadius: 4,
   },
   cardValue: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
+    ...theme.typography.headlineLg,
+    fontWeight: '700',
+    color: theme.colors.primary,
   },
   cardLabel: {
-    fontSize: 11,
-    color: '#666666',
-    marginTop: 8,
+    ...theme.typography.labelSm,
+    color: theme.colors.primary,
+    opacity: 0.8,
+    marginTop: theme.spacing.gapSm,
   },
   section: {
-    marginBottom: 24,
+    marginBottom: theme.spacing.gapLg,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginHorizontal: 16,
-    marginBottom: 12,
+    marginHorizontal: theme.spacing.margin,
+    marginBottom: theme.spacing.gapSm,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
+    ...theme.typography.headlineMd,
+    color: theme.colors.primary,
+    fontWeight: '700',
   },
   seeAll: {
-    fontSize: 14,
-    color: '#6750A4',
-    fontWeight: '600',
+    ...theme.typography.labelMd,
+    color: theme.colors.primary,
   },
   emptyText: {
-    marginHorizontal: 16,
-    color: '#888888',
-    fontSize: 14,
+    marginHorizontal: theme.spacing.margin,
+    ...theme.typography.bodyMd,
+    color: theme.colors.textMuted,
     fontStyle: 'italic',
-    paddingVertical: 8,
+    paddingVertical: theme.spacing.gapSm,
   },
 });
+

@@ -1,6 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from '../utils/secureStore';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import estimatorApi from './estimatorApi';

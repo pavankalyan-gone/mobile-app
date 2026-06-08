@@ -1,6 +1,7 @@
 import axios from 'axios';
-import * as SecureStore from 'expo-secure-store';
-import { ESTIMATOR_API_URL, ESTIMATOR_TOKEN_KEY } from '../constants/config';
+import * as SecureStore from '../utils/secureStore';
+import { ESTIMATOR_API_URL, ESTIMATOR_TOKEN_KEY, MOCK_MODE } from '../constants/config';
+import { mockAdapter } from '../utils/mockData';
 
 const estimatorApi = axios.create({
   baseURL: ESTIMATOR_API_URL,
@@ -10,6 +11,10 @@ const estimatorApi = axios.create({
     'Accept': 'application/json',
   },
 });
+
+if (MOCK_MODE) {
+  estimatorApi.defaults.adapter = mockAdapter as any;
+}
 
 estimatorApi.interceptors.request.use(async (config) => {
   const token = await SecureStore.getItemAsync(ESTIMATOR_TOKEN_KEY);

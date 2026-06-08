@@ -1,6 +1,6 @@
 import estimatorApi from './estimatorApi';
 import perfexApi from './perfexApi';
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from '../utils/secureStore';
 import { ESTIMATOR_TOKEN_KEY, PERFEX_TOKEN_KEY } from '../constants/config';
 
 export interface LoginPayload {

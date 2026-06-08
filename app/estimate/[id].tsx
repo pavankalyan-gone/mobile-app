@@ -1,18 +1,37 @@
 import { useState, useEffect } from 'react';
-import { View, ScrollView, StyleSheet, Linking, TouchableOpacity, Alert } from 'react-native';
+import { View, ScrollView, StyleSheet, Linking, TouchableOpacity, Alert, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { Text, Chip, Button, Divider, DataTable, ActivityIndicator } from 'react-native-paper';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useEstimate, useUpdateEstimateStatus } from '../../hooks/useEstimates';
+import {
+  useEstimate,
+  useUpdateEstimateStatus,
+  useSendEstimate,
+  useSubmitEstimate,
+  useApproveEstimate,
+  useRejectEstimate,
+  useEstimateComments,
+  usePostComment,
+} from '../../hooks/useEstimates';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { theme } from '../../constants/theme';
 
 export default function EstimateDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data: estimate, isLoading } = useEstimate(Number(id));
   const { mutate: updateStatus, isPending: isUpdating } = useUpdateEstimateStatus();
+  const { mutate: sendEstimate, isPending: isSending } = useSendEstimate();
+  const { mutate: submitEstimate, isPending: isSubmitting } = useSubmitEstimate();
+  const { mutate: approveEstimate, isPending: isApproving } = useApproveEstimate();
+  const { mutate: rejectEstimate, isPending: isRejecting } = useRejectEstimate();
+  const { data: comments } = useEstimateComments(Number(id));
+  const { mutate: postComment, isPending: isPosting } = usePostComment();
 
   const [displayStatus, setDisplayStatus] = useState<string>('');
+  const [commentText, setCommentText] = useState('');
+  const [rejectDialogVisible, setRejectDialogVisible] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
 
   useEffect(() => {
     if (estimate) {
@@ -23,7 +42,7 @@ export default function EstimateDetailScreen() {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#6750A4" />
+        <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
     );
   }
@@ -39,57 +58,76 @@ export default function EstimateDetailScreen() {
   }
 
   const getStatusStyles = (status: string) => {
-    const normalized = status.toLowerCase();
-    if (normalized === 'draft') return { backgroundColor: '#F3F4F6', color: '#374151' };
-    if (normalized === 'sent') return { backgroundColor: '#DBEAFE', color: '#1E40AF' };
-    if (normalized === 'accepted') return { backgroundColor: '#D1FAE5', color: '#065F46' };
-    if (normalized === 'declined') return { backgroundColor: '#FEE2E2', color: '#991B1B' };
-    if (normalized === 'expired') return { backgroundColor: '#FEF3C7', color: '#92400E' };
-    if (normalized === 'approved') return { backgroundColor: '#D1FAE5', color: '#065F46' };
-    if (normalized === 'waiting_approval' || normalized === 'pending_approval') return { backgroundColor: '#FEF3C7', color: '#92400E' };
-    
-    return { backgroundColor: '#F3F4F6', color: '#374151' };
+    const normalized = status.toLowerCase().replace(/\s+/g, '_');
+    if (normalized.includes('accept') || normalized.includes('approv')) {
+      return { backgroundColor: '#cfebba', color: '#1b300f' }; // Light forest tint
+    }
+    if (normalized.includes('declin') || normalized.includes('expir')) {
+      return { backgroundColor: '#ffdad6', color: '#ba1a1a' }; // Red error tint
+    }
+    if (normalized.includes('sent') || normalized.includes('wait') || normalized.includes('pend')) {
+      return { backgroundColor: '#ffd8ed', color: '#290a21' }; // Pink tertiary tint
+    }
+    return { backgroundColor: '#eeeeec', color: '#44483f' }; // Gray tint
   };
 
   const statusStyles = getStatusStyles(displayStatus);
 
   const handleAccept = () => {
-    const prevStatus = displayStatus;
+    const prev = displayStatus;
     setDisplayStatus('accepted');
-    updateStatus(
-      { id: estimate.id, status: 'accepted' },
-      {
-        onError: (err) => {
-          console.error('Failed to accept estimate:', err);
-          setDisplayStatus(prevStatus);
-        },
-      }
-    );
-  };
-
-  const handleDeclineConfirm = () => {
-    const prevStatus = displayStatus;
-    setDisplayStatus('declined');
-    updateStatus(
-      { id: estimate.id, status: 'declined' },
-      {
-        onError: (err) => {
-          console.error('Failed to decline estimate:', err);
-          setDisplayStatus(prevStatus);
-        },
-      }
-    );
+    updateStatus({ id: estimate.id, status: 'accepted' }, { onError: () => setDisplayStatus(prev) });
   };
 
   const handleDecline = () => {
-    Alert.alert(
-      'Mark as Declined?',
-      'Are you sure you want to mark this estimate as declined? This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Confirm', onPress: handleDeclineConfirm },
-      ]
+    Alert.alert('Mark as Declined?', 'Are you sure you want to mark this estimate as declined?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Confirm',
+        onPress: () => {
+          const prev = displayStatus;
+          setDisplayStatus('declined');
+          updateStatus({ id: estimate.id, status: 'declined' }, { onError: () => setDisplayStatus(prev) });
+        },
+      },
+    ]);
+  };
+
+  const handleSend = () => {
+    const prev = displayStatus;
+    setDisplayStatus('sent');
+    sendEstimate(estimate.id, { onError: () => setDisplayStatus(prev) });
+  };
+
+  const handleSubmit = () => {
+    const prev = displayStatus;
+    setDisplayStatus('waiting_approval');
+    submitEstimate(estimate.id, { onError: () => setDisplayStatus(prev) });
+  };
+
+  const handleApprove = () => {
+    const prev = displayStatus;
+    setDisplayStatus('approved');
+    approveEstimate(estimate.id, { onError: () => setDisplayStatus(prev) });
+  };
+
+  const handleRejectConfirm = () => {
+    if (!rejectReason.trim()) return;
+    const prev = displayStatus;
+    setDisplayStatus('declined');
+    setRejectDialogVisible(false);
+    rejectEstimate(
+      { id: estimate.id, reason: rejectReason.trim() },
+      { onError: () => setDisplayStatus(prev) }
     );
+    setRejectReason('');
+  };
+
+  const handlePostComment = () => {
+    const text = commentText.trim();
+    if (!text) return;
+    setCommentText('');
+    postComment({ estimateId: estimate.id, payload: { content: text } });
   };
 
   const formatDate = (dateStr: string) => {
@@ -97,253 +135,537 @@ export default function EstimateDetailScreen() {
     const date = new Date(dateStr);
     const dayNum = String(date.getDate()).padStart(2, '0');
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const monthName = months[date.getMonth()];
-    const year = date.getFullYear();
-    return `${dayNum} ${monthName} ${year}`;
+    return `${dayNum} ${months[date.getMonth()]} ${date.getFullYear()}`;
   };
 
+  const formatDateTime = (dateStr: string) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    let hours = date.getHours();
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12 || 12;
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${String(date.getDate()).padStart(2, '0')} ${months[date.getMonth()]} ${date.getFullYear()}, ${hours}:${minutes} ${ampm}`;
+  };
+
+  const norm = displayStatus.toLowerCase().replace(/\s+/g, '_');
+  const anyActionPending = isUpdating || isSending || isSubmitting || isApproving || isRejecting;
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-      <Stack.Screen options={{ title: 'Estimate Details' }} />
-      
-      {/* Header Section */}
-      <View style={styles.header}>
-        <Text variant="headlineSmall" style={styles.title}>
-          {estimate.estimate_number}
-        </Text>
-        <Chip
-          style={{ backgroundColor: statusStyles.backgroundColor, height: 32, justifyContent: 'center' }}
-          textStyle={{ color: statusStyles.color, fontWeight: 'bold' }}
-        >
-          {displayStatus.toUpperCase()}
-        </Chip>
-      </View>
-      <Divider />
-
-      {/* Info Section */}
-      <View style={styles.infoSection}>
-        <TouchableOpacity
-          style={styles.infoRow}
-          onPress={() => router.push(`/lead/${estimate.lead_id}`)}
-        >
-          <MaterialCommunityIcons name="account-outline" size={22} color="#757575" />
-          <Text style={styles.infoTextLink}>{estimate.lead_name}</Text>
-        </TouchableOpacity>
-
-        <View style={styles.infoRow}>
-          <MaterialCommunityIcons name="calendar-outline" size={22} color="#757575" />
-          <Text style={styles.infoText}>Valid until {formatDate(estimate.valid_until)}</Text>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          headerTitle: 'Estimate Details',
+          headerTitleStyle: { ...theme.typography.headlineMd, color: theme.colors.primary },
+          headerStyle: { backgroundColor: theme.colors.background },
+          headerShadowVisible: false,
+        }}
+      />
+      <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+        {/* Header Block */}
+        <View style={styles.header}>
+          <Text style={styles.title}>{estimate.estimate_number}</Text>
+          <Chip
+            style={[styles.statusChip, { backgroundColor: statusStyles.backgroundColor }]}
+            textStyle={{ color: statusStyles.color, fontWeight: '700' }}
+            showSelectedOverlay={false}
+          >
+            {displayStatus.toUpperCase().replace(/_/g, ' ')}
+          </Chip>
         </View>
-      </View>
-      <Divider />
 
-      {/* Line Items Table Section */}
-      <View style={styles.tableSection}>
-        <Text style={styles.sectionTitle}>Line Items</Text>
-        <DataTable style={styles.table}>
-          <DataTable.Header>
-            <DataTable.Title style={styles.colDesc}>Description</DataTable.Title>
-            <DataTable.Title numeric style={styles.colQty}>Qty</DataTable.Title>
-            <DataTable.Title numeric style={styles.colRate}>Rate</DataTable.Title>
-            <DataTable.Title numeric style={styles.colAmt}>Amount</DataTable.Title>
-          </DataTable.Header>
+        {/* Info Card */}
+        <View style={styles.card}>
+          <Text style={styles.cardSectionLabel}>Details</Text>
+          <TouchableOpacity
+            style={styles.infoRow}
+            activeOpacity={0.7}
+            onPress={() => estimate.lead_id && router.push(`/lead/${estimate.lead_id}`)}
+          >
+            <MaterialCommunityIcons name="account-outline" size={22} color={theme.colors.primary} />
+            <Text style={styles.infoTextLink}>{estimate.lead_name}</Text>
+          </TouchableOpacity>
 
-          {estimate.items && estimate.items.map((item) => (
-            <DataTable.Row key={item.id}>
-              <DataTable.Cell style={styles.colDesc}>
-                <Text style={styles.cellText}>{item.description}</Text>
+          <View style={styles.infoRow}>
+            <MaterialCommunityIcons name="calendar-outline" size={22} color={theme.colors.textMuted} />
+            <Text style={styles.infoText}>Valid until {formatDate(estimate.valid_until)}</Text>
+          </View>
+        </View>
+
+        {/* Line Items Card */}
+        <View style={styles.card}>
+          <Text style={styles.cardSectionLabelBold}>Line Items</Text>
+          <DataTable style={styles.table}>
+            <DataTable.Header style={styles.tableHeader}>
+              <DataTable.Title style={styles.colDesc}><Text style={styles.headerText}>Description</Text></DataTable.Title>
+              <DataTable.Title numeric style={styles.colQty}><Text style={styles.headerText}>Qty</Text></DataTable.Title>
+              <DataTable.Title numeric style={styles.colRate}><Text style={styles.headerText}>Rate</Text></DataTable.Title>
+              <DataTable.Title numeric style={styles.colAmt}><Text style={styles.headerText}>Amount</Text></DataTable.Title>
+            </DataTable.Header>
+
+            {estimate.items?.map((item) => (
+              <DataTable.Row key={item.id} style={styles.tableRow}>
+                <DataTable.Cell style={styles.colDesc}>
+                  <Text style={styles.cellText}>{item.description}</Text>
+                </DataTable.Cell>
+                <DataTable.Cell numeric style={styles.colQty}>
+                  <Text style={styles.cellText}>{item.qty}</Text>
+                </DataTable.Cell>
+                <DataTable.Cell numeric style={styles.colRate}>
+                  <Text style={styles.cellText}>₹{item.rate.toLocaleString('en-IN')}</Text>
+                </DataTable.Cell>
+                <DataTable.Cell numeric style={styles.colAmt}>
+                  <Text style={styles.cellText}>₹{item.amount.toLocaleString('en-IN')}</Text>
+                </DataTable.Cell>
+              </DataTable.Row>
+            ))}
+
+            <DataTable.Row style={styles.summaryRow}>
+              <DataTable.Cell style={{ flex: 4 }}>
+                <Text style={styles.subtotalLabel}>Subtotal</Text>
               </DataTable.Cell>
-              <DataTable.Cell numeric style={styles.colQty}>
-                <Text style={styles.cellText}>{item.qty}</Text>
-              </DataTable.Cell>
-              <DataTable.Cell numeric style={styles.colRate}>
-                <Text style={styles.cellText}>₹{item.rate.toLocaleString('en-IN')}</Text>
-              </DataTable.Cell>
-              <DataTable.Cell numeric style={styles.colAmt}>
-                <Text style={styles.cellText}>₹{item.amount.toLocaleString('en-IN')}</Text>
+              <DataTable.Cell numeric style={{ flex: 1.5 }}>
+                <Text style={styles.subtotalValue}>₹{estimate.subtotal?.toLocaleString('en-IN')}</Text>
               </DataTable.Cell>
             </DataTable.Row>
-          ))}
 
-          <DataTable.Row style={styles.summaryRow}>
-            <DataTable.Cell style={{ flex: 4 }}>
-              <Text style={styles.subtotalLabel}>Subtotal</Text>
-            </DataTable.Cell>
-            <DataTable.Cell numeric style={{ flex: 1.5 }}>
-              <Text style={styles.subtotalValue}>₹{estimate.subtotal.toLocaleString('en-IN')}</Text>
-            </DataTable.Cell>
-          </DataTable.Row>
+            <DataTable.Row style={styles.totalRow}>
+              <DataTable.Cell style={{ flex: 4 }}>
+                <Text style={styles.totalLabel}>Total</Text>
+              </DataTable.Cell>
+              <DataTable.Cell numeric style={{ flex: 1.5 }}>
+                <Text style={styles.totalValue}>₹{estimate.total.toLocaleString('en-IN')}</Text>
+              </DataTable.Cell>
+            </DataTable.Row>
+          </DataTable>
+        </View>
 
-          <DataTable.Row style={styles.summaryRow}>
-            <DataTable.Cell style={{ flex: 4 }}>
-              <Text style={styles.totalLabel}>Total</Text>
-            </DataTable.Cell>
-            <DataTable.Cell numeric style={{ flex: 1.5 }}>
-              <Text style={styles.totalValue}>₹{estimate.total.toLocaleString('en-IN')}</Text>
-            </DataTable.Cell>
-          </DataTable.Row>
-        </DataTable>
-      </View>
-      <Divider />
+        {/* Actions Card */}
+        <View style={styles.card}>
+          <Text style={styles.cardSectionLabel}>Actions</Text>
+          <View style={styles.buttonsRow}>
+            {/* Draft → Send or Submit for Approval */}
+            {norm === 'draft' && (
+              <>
+                <Button
+                  mode="contained"
+                  onPress={handleSend}
+                  loading={isSending}
+                  disabled={anyActionPending}
+                  style={styles.actionButton}
+                  contentStyle={styles.buttonContent}
+                  buttonColor={theme.colors.primary}
+                  textColor={theme.colors.onPrimary}
+                >
+                  Send
+                </Button>
+                <Button
+                  mode="outlined"
+                  onPress={handleSubmit}
+                  loading={isSubmitting}
+                  disabled={anyActionPending}
+                  style={styles.actionButton}
+                  contentStyle={styles.buttonContent}
+                  textColor={theme.colors.primary}
+                >
+                  Submit for Approval
+                </Button>
+              </>
+            )}
 
-      {/* Actions Section */}
-      <View style={styles.actionsSection}>
-        <View style={styles.buttonsRow}>
-          {displayStatus === 'sent' && (
-            <>
-              <Button
-                mode="contained"
-                onPress={handleAccept}
-                loading={isUpdating}
-                disabled={isUpdating}
-                style={styles.actionButton}
-                contentStyle={styles.buttonContent}
-              >
-                Mark Accepted
-              </Button>
+            {/* Sent → Mark Accepted / Declined */}
+            {norm === 'sent' && (
+              <>
+                <Button
+                  mode="contained"
+                  onPress={handleAccept}
+                  loading={isUpdating}
+                  disabled={anyActionPending}
+                  style={styles.actionButton}
+                  contentStyle={styles.buttonContent}
+                  buttonColor={theme.colors.primary}
+                  textColor={theme.colors.onPrimary}
+                >
+                  Mark Accepted
+                </Button>
+                <Button
+                  mode="outlined"
+                  onPress={handleDecline}
+                  loading={isUpdating}
+                  disabled={anyActionPending}
+                  textColor={theme.colors.error}
+                  style={[styles.actionButton, styles.declineButton]}
+                  contentStyle={styles.buttonContent}
+                >
+                  Mark Declined
+                </Button>
+              </>
+            )}
+
+            {/* Waiting / Pending Approval → Approve or Reject */}
+            {(norm === 'waiting_approval' || norm === 'pending_approval') && (
+              <>
+                <Button
+                  mode="contained"
+                  onPress={handleApprove}
+                  loading={isApproving}
+                  disabled={anyActionPending}
+                  style={styles.actionButton}
+                  contentStyle={styles.buttonContent}
+                  buttonColor={theme.colors.primary}
+                  textColor={theme.colors.onPrimary}
+                >
+                  Approve
+                </Button>
+                <Button
+                  mode="outlined"
+                  onPress={() => setRejectDialogVisible(true)}
+                  loading={isRejecting}
+                  disabled={anyActionPending}
+                  textColor={theme.colors.error}
+                  style={[styles.actionButton, styles.declineButton]}
+                  contentStyle={styles.buttonContent}
+                >
+                  Reject
+                </Button>
+              </>
+            )}
+
+            {estimate.pdf_url && (
               <Button
                 mode="outlined"
-                onPress={handleDecline}
-                loading={isUpdating}
-                disabled={isUpdating}
-                textColor="#d32f2f"
-                style={[styles.actionButton, styles.declineButton]}
+                icon="file-pdf-box"
+                onPress={() => Linking.openURL(estimate.pdf_url!)}
+                style={styles.actionButton}
                 contentStyle={styles.buttonContent}
+                textColor={theme.colors.primary}
               >
-                Mark Declined
+                View PDF
               </Button>
-            </>
-          )}
+            )}
+          </View>
 
-          {estimate.pdf_url && (
-            <Button
-              mode="outlined"
-              icon="file-pdf-box"
-              onPress={() => Linking.openURL(estimate.pdf_url!)}
-              style={styles.actionButton}
-              contentStyle={styles.buttonContent}
-            >
-              View PDF
-            </Button>
+          {/* Reject reason input */}
+          {rejectDialogVisible && (
+            <View style={styles.rejectBox}>
+              <Text style={styles.rejectLabel}>Rejection reason</Text>
+              <TextInput
+                style={styles.rejectInput}
+                value={rejectReason}
+                onChangeText={setRejectReason}
+                placeholder="Enter reason…"
+                multiline
+                placeholderTextColor={theme.colors.textMuted}
+              />
+              <View style={styles.rejectActions}>
+                <Button mode="text" onPress={() => { setRejectDialogVisible(false); setRejectReason(''); }} textColor={theme.colors.primary}>
+                  Cancel
+                </Button>
+                <Button
+                  mode="contained"
+                  onPress={handleRejectConfirm}
+                  disabled={!rejectReason.trim() || isRejecting}
+                  loading={isRejecting}
+                  buttonColor={theme.colors.error}
+                  textColor={theme.colors.onError}
+                  style={styles.rejectConfirmBtn}
+                >
+                  Confirm Reject
+                </Button>
+              </View>
+            </View>
           )}
         </View>
-      </View>
-    </ScrollView>
+
+        {/* Comments Card */}
+        <View style={[styles.card, styles.commentsCard]}>
+          <Text style={styles.cardSectionLabelBold}>Comments</Text>
+
+          {!comments || comments.length === 0 ? (
+            <Text style={styles.emptyText}>No comments yet</Text>
+          ) : (
+            comments.map((c) => (
+              <View key={c.id} style={styles.commentCard}>
+                <View style={styles.commentHeader}>
+                  <Text style={styles.commentAuthor}>{c.user?.name ?? 'Unknown'}</Text>
+                  <Text style={styles.commentDate}>{formatDateTime(c.created_at)}</Text>
+                </View>
+                <Text style={styles.commentBody}>{c.content}</Text>
+              </View>
+            ))
+          )}
+
+          {/* Add comment */}
+          <View style={styles.commentInputRow}>
+            <TextInput
+              style={styles.commentInput}
+              value={commentText}
+              onChangeText={setCommentText}
+              placeholder="Add a comment…"
+              placeholderTextColor={theme.colors.textMuted}
+              multiline
+            />
+            <TouchableOpacity
+              onPress={handlePostComment}
+              disabled={!commentText.trim() || isPosting}
+              style={[styles.sendBtn, (!commentText.trim() || isPosting) && { opacity: 0.4 }]}
+            >
+              {isPosting ? (
+                <ActivityIndicator size={20} color={theme.colors.primary} />
+              ) : (
+                <MaterialCommunityIcons name="send" size={22} color={theme.colors.primary} />
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: theme.colors.background,
   },
   scrollContent: {
-    paddingBottom: 40,
+    paddingBottom: theme.spacing.gapLg,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
+    backgroundColor: theme.colors.background,
   },
   header: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: theme.spacing.margin,
+    paddingVertical: theme.spacing.gapMd,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   title: {
-    fontWeight: 'bold',
-    color: '#1a1a1a',
+    ...theme.typography.headlineLg,
+    color: theme.colors.primary,
+    fontWeight: '700',
   },
-  infoSection: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    gap: 10,
+  statusChip: {
+    alignSelf: 'center',
+    height: 32,
+    borderRadius: theme.roundness.md,
+    justifyContent: 'center',
+  },
+  card: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.roundness.xl,
+    padding: theme.spacing.paddingX,
+    marginHorizontal: theme.spacing.margin,
+    marginVertical: theme.spacing.gapSm,
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
+    shadowColor: theme.colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.01,
+    shadowRadius: 4,
+  },
+  commentsCard: {
+    marginBottom: theme.spacing.gapLg,
+  },
+  cardSectionLabel: {
+    ...theme.typography.labelSm,
+    color: theme.colors.textMuted,
+    marginBottom: 12,
+    fontWeight: '700',
+  },
+  cardSectionLabelBold: {
+    ...theme.typography.labelMd,
+    color: theme.colors.primary,
+    marginBottom: 12,
+    fontWeight: '700',
   },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    paddingVertical: 8,
   },
   infoText: {
-    fontSize: 16,
-    color: '#1a1a1a',
+    ...theme.typography.bodyMd,
+    color: theme.colors.onSurface,
+    fontWeight: '500',
   },
   infoTextLink: {
-    fontSize: 16,
-    color: '#1e88e5',
+    ...theme.typography.bodyLg,
+    color: theme.colors.primary,
+    fontWeight: '700',
     textDecorationLine: 'underline',
   },
-  tableSection: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    color: '#888888',
-    marginBottom: 12,
-    fontWeight: 'bold',
-  },
   table: {
-    borderWidth: 0.5,
-    borderColor: '#e0e0e0',
-    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
+    borderRadius: theme.roundness.md,
     overflow: 'hidden',
+    marginTop: 4,
   },
-  colDesc: {
-    flex: 2,
+  tableHeader: {
+    backgroundColor: theme.colors.surfaceContainerLow,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.borderSubtle,
   },
-  colQty: {
-    flex: 0.8,
+  tableRow: {
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.borderSubtle,
   },
-  colRate: {
-    flex: 1.2,
+  headerText: {
+    ...theme.typography.labelSm,
+    fontWeight: '700',
+    color: theme.colors.primary,
   },
-  colAmt: {
-    flex: 1.5,
-  },
-  cellText: {
+  colDesc: { flex: 2 },
+  colQty: { flex: 0.8 },
+  colRate: { flex: 1.2 },
+  colAmt: { flex: 1.5 },
+  cellText: { 
+    ...theme.typography.bodyMd,
     fontSize: 12,
   },
-  summaryRow: {
-    backgroundColor: '#fafafa',
+  summaryRow: { 
+    backgroundColor: theme.colors.surfaceContainerLow,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.borderSubtle,
   },
-  subtotalLabel: {
-    color: '#666666',
-    fontSize: 14,
+  totalRow: {
+    backgroundColor: theme.colors.surfaceContainer,
   },
-  subtotalValue: {
-    color: '#666666',
-    fontSize: 14,
+  subtotalLabel: { 
+    ...theme.typography.bodyMd,
+    color: theme.colors.textMuted,
   },
-  totalLabel: {
-    fontWeight: 'bold',
-    fontSize: 16,
-    color: '#1a1a1a',
+  subtotalValue: { 
+    ...theme.typography.bodyMd,
+    color: theme.colors.onSurfaceVariant,
   },
-  totalValue: {
-    fontWeight: 'bold',
-    fontSize: 16,
-    color: '#1a1a1a',
+  totalLabel: { 
+    ...theme.typography.labelLg,
+    fontWeight: '700', 
+    color: theme.colors.primary,
   },
-  actionsSection: {
-    padding: 20,
+  totalValue: { 
+    ...theme.typography.headlineMd,
+    fontWeight: '700', 
+    color: theme.colors.primary,
   },
   buttonsRow: {
     flexDirection: 'row',
     gap: 12,
     flexWrap: 'wrap',
+    marginTop: 4,
   },
   actionButton: {
-    borderRadius: 8,
-    minWidth: 120,
+    borderRadius: theme.roundness.xl,
+    minWidth: 130,
+    flex: 1,
+    height: 48,
+    justifyContent: 'center',
   },
   buttonContent: {
-    paddingVertical: 6,
+    height: 48,
   },
   declineButton: {
-    borderColor: '#d32f2f',
+    borderColor: theme.colors.error,
+  },
+  rejectBox: {
+    marginTop: 16,
+    backgroundColor: '#ffdad6',
+    borderRadius: theme.roundness.md,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: theme.colors.error,
+  },
+  rejectLabel: {
+    ...theme.typography.labelMd,
+    fontWeight: '700',
+    color: theme.colors.error,
+    marginBottom: 8,
+  },
+  rejectInput: {
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
+    borderRadius: theme.roundness.md,
+    padding: 10,
+    ...theme.typography.bodyMd,
+    minHeight: 72,
+    backgroundColor: theme.colors.surface,
+    color: theme.colors.onSurface,
+    textAlignVertical: 'top',
+  },
+  rejectActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 12,
+    gap: 8,
+  },
+  rejectConfirmBtn: {
+    borderRadius: theme.roundness.xl,
+  },
+  emptyText: {
+    ...theme.typography.bodyMd,
+    color: theme.colors.textMuted,
+    fontStyle: 'italic',
+    marginBottom: 12,
+  },
+  commentCard: {
+    backgroundColor: theme.colors.surfaceContainerLow,
+    borderRadius: theme.roundness.md,
+    padding: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
+  },
+  commentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  commentAuthor: {
+    ...theme.typography.labelSm,
+    fontWeight: '700',
+    color: theme.colors.primary,
+  },
+  commentDate: {
+    ...theme.typography.labelSm,
+    fontSize: 10,
+    color: theme.colors.textMuted,
+  },
+  commentBody: {
+    ...theme.typography.bodyMd,
+    color: theme.colors.onSurface,
+    lineHeight: 20,
+  },
+  commentInputRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 10,
+    marginTop: 8,
+  },
+  commentInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
+    borderRadius: theme.roundness.md,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    ...theme.typography.bodyMd,
+    color: theme.colors.onSurface,
+    maxHeight: 100,
+    backgroundColor: theme.colors.surfaceContainerLow,
+    textAlignVertical: 'top',
+  },
+  sendBtn: {
+    padding: 8,
+    marginBottom: 2,
   },
 });
+

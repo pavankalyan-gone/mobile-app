@@ -1,10 +1,13 @@
 import { useState } from 'react';
-import { StyleSheet, View, KeyboardAvoidingView, Platform } from 'react-native';
+import { StyleSheet, View, KeyboardAvoidingView, Platform, TouchableOpacity, Image } from 'react-native';
 import { Text, TextInput, Button, HelperText } from 'react-native-paper';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useAuthStore } from '../../store/authStore';
+import { theme } from '../../constants/theme';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 export default function LoginScreen() {
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -32,51 +35,107 @@ export default function LoginScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <Stack.Screen options={{ headerShown: false }} />
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: 'Login',
+          headerTitleAlign: 'center',
+          headerStyle: { backgroundColor: theme.colors.background },
+          headerShadowVisible: false,
+          headerTitleStyle: { ...theme.typography.headlineMd, color: theme.colors.primary, fontWeight: '700' },
+          headerLeft: () => (
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                }
+              }}
+            >
+              <MaterialCommunityIcons name="arrow-left" size={24} color={theme.colors.primary} />
+            </TouchableOpacity>
+          ),
+        }}
+      />
       <View style={styles.inner}>
-        <Text style={styles.title}>Perfex CRM</Text>
-        <Text style={styles.subtitle}>Sign in to your account</Text>
-
-        <TextInput
-          label="Email"
-          value={email}
-          onChangeText={handleEmailChange}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          autoCorrect={false}
-          mode="outlined"
-          style={styles.emailInput}
+        {/* Minimalist Illustration */}
+        <Image
+          source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBI73TYbWJHtUSjVLXE_WhI4bLDaugrGVJyURGAljnQRM_HH5yL_Q4l-R-23UyAwe61mPD-nKBHZLIkh35SFfUFlbfp2Sia0wFNPDXQfrTatYOV1bkp830QFpIAgJgnomV6TVkiicUXzPVtnWobzlx03hRBpA8wELmDAMe2ZpOscGwxTMAawh4IZrHe-auMCu3A1N9IWOuMqgYT210Ujh0RXcVUHGL-ruUZe9vi1rYKraK3yyxDu6OulhM0CehdGH9cuH5qQ644raY' }}
+          style={styles.illustration}
         />
 
-        <TextInput
-          label="Password"
-          value={password}
-          onChangeText={handlePasswordChange}
-          secureTextEntry={!showPassword}
-          right={
-            <TextInput.Icon
-              icon={showPassword ? 'eye-off' : 'eye'}
-              onPress={() => setShowPassword(!showPassword)}
-            />
-          }
-          mode="outlined"
-          style={styles.passwordInput}
-        />
+        {/* Input Fields */}
+        <View style={styles.formContainer}>
+          <TextInput
+            label="Email"
+            placeholder="Enter your email"
+            value={email}
+            onChangeText={handleEmailChange}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            mode="outlined"
+            style={styles.input}
+            outlineStyle={styles.inputOutline}
+            activeOutlineColor={theme.colors.primary}
+            textColor={theme.colors.onSurface}
+            theme={{ colors: { background: theme.colors.surface } }}
+            left={<TextInput.Icon icon="email-outline" color={theme.colors.textMuted} />}
+          />
 
-        <HelperText type="error" visible={error !== null} style={styles.errorText}>
-          {error || ''}
-        </HelperText>
+          <TextInput
+            label="Password"
+            placeholder="Enter your password"
+            value={password}
+            onChangeText={handlePasswordChange}
+            secureTextEntry={!showPassword}
+            mode="outlined"
+            style={styles.input}
+            outlineStyle={styles.inputOutline}
+            activeOutlineColor={theme.colors.primary}
+            textColor={theme.colors.onSurface}
+            theme={{ colors: { background: theme.colors.surface } }}
+            left={<TextInput.Icon icon="lock-outline" color={theme.colors.textMuted} />}
+            right={
+              <TextInput.Icon
+                icon={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                color={theme.colors.textMuted}
+                onPress={() => setShowPassword(!showPassword)}
+              />
+            }
+          />
 
-        <Button
-          mode="contained"
-          onPress={handleLogin}
-          loading={isLoading}
-          disabled={isLoading}
-          style={styles.button}
-          contentStyle={styles.buttonContent}
-        >
-          Sign in
-        </Button>
+          {error !== null && (
+            <HelperText type="error" visible={error !== null} style={styles.errorText}>
+              {error}
+            </HelperText>
+          )}
+
+          <Button
+            mode="contained"
+            onPress={handleLogin}
+            loading={isLoading}
+            disabled={isLoading}
+            style={styles.button}
+            contentStyle={styles.buttonContent}
+            buttonColor={theme.colors.primary}
+            textColor={theme.colors.onPrimary}
+          >
+            Sign in
+          </Button>
+
+          {/* Social login divider or custom actions */}
+          <View style={styles.dividerRow}>
+            <View style={styles.divider} />
+            <Text style={styles.dividerText}>or</Text>
+            <View style={styles.divider} />
+          </View>
+
+          <TouchableOpacity style={styles.socialButton} activeOpacity={0.8}>
+            <MaterialCommunityIcons name="google" size={20} color={theme.colors.primary} style={styles.socialIcon} />
+            <Text style={styles.socialButtonText}>Continue with Google</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </KeyboardAvoidingView>
   );
@@ -85,38 +144,96 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: theme.colors.background,
   },
   inner: {
     flex: 1,
     justifyContent: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: theme.spacing.margin,
+    paddingTop: 80,
+  },
+  backButton: {
+    marginLeft: 8,
+  },
+  illustration: {
+    width: 240,
+    height: 160,
+    resizeMode: 'contain',
+    alignSelf: 'center',
+    marginBottom: theme.spacing.gapLg,
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 4,
+    ...theme.typography.headlineLg,
+    color: theme.colors.primary,
+    fontWeight: '700',
+    marginBottom: theme.spacing.gapSm,
   },
   subtitle: {
-    fontSize: 16,
-    color: '#666666',
-    marginBottom: 32,
+    ...theme.typography.bodyLg,
+    color: theme.colors.textMuted,
+    textAlign: 'center',
   },
-  emailInput: {
-    marginBottom: 16,
+  formContainer: {
+    width: '100%',
   },
-  passwordInput: {
-    marginBottom: 8,
+  input: {
+    marginBottom: theme.spacing.gapMd,
+  },
+  inputOutline: {
+    borderRadius: theme.roundness.xl,
+    borderColor: theme.colors.borderSubtle,
+    borderWidth: 1,
   },
   errorText: {
+    color: theme.colors.errorRed,
     paddingHorizontal: 0,
-    marginBottom: 8,
+    marginBottom: theme.spacing.gapSm,
   },
   button: {
-    borderRadius: 8,
-    marginTop: 8,
+    borderRadius: theme.roundness.xl,
+    marginTop: theme.spacing.gapSm,
+    height: 56,
+    justifyContent: 'center',
+    shadowColor: theme.colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 4,
   },
   buttonContent: {
-    paddingVertical: 6,
+    height: 56,
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: theme.spacing.gapLg,
+  },
+  divider: {
+    flex: 1,
+    height: 1,
+    backgroundColor: theme.colors.borderSubtle,
+  },
+  dividerText: {
+    ...theme.typography.labelSm,
+    color: theme.colors.textMuted,
+    paddingHorizontal: 12,
+  },
+  socialButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 56,
+    borderRadius: theme.roundness.xl,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
+  },
+  socialIcon: {
+    marginRight: 8,
+  },
+  socialButtonText: {
+    ...theme.typography.labelMd,
+    color: theme.colors.primary,
   },
 });
+

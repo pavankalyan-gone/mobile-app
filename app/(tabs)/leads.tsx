@@ -6,12 +6,13 @@ import { useRouter, Stack } from 'expo-router';
 import { useLeads, useLeadStatuses } from '../../hooks/useLeads';
 import { LeadCard } from '../../components/leads/LeadCard';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { theme } from '../../constants/theme';
 
 export default function LeadsScreen() {
   const router = useRouter();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState<number | ''>('');
 
   // 400ms debounce on search input
   useEffect(() => {
@@ -42,7 +43,11 @@ export default function LeadsScreen() {
     <SafeAreaView style={styles.container}>
       <Stack.Screen
         options={{
+          headerShown: true,
           headerTitle: 'Leads',
+          headerTitleStyle: { ...theme.typography.headlineMd, color: theme.colors.primary },
+          headerStyle: { backgroundColor: theme.colors.background },
+          headerShadowVisible: false,
           headerRight: totalCount !== undefined ? () => (
             <Text style={styles.headerCount}>{totalCount} leads</Text>
           ) : undefined,
@@ -54,6 +59,9 @@ export default function LeadsScreen() {
         value={search}
         onChangeText={setSearch}
         style={styles.searchbar}
+        placeholderTextColor={theme.colors.textMuted}
+        iconColor={theme.colors.textMuted}
+        inputStyle={{ color: theme.colors.onSurface }}
       />
 
       {/* Status Filter Chips Row */}
@@ -70,19 +78,21 @@ export default function LeadsScreen() {
             onPress={() => setStatusFilter('')}
             style={statusFilter === '' ? styles.chipSelected : styles.chipUnselected}
             textStyle={statusFilter === '' ? styles.chipTextSelected : styles.chipTextUnselected}
+            showSelectedOverlay={false}
           >
             All
           </Chip>
           {statuses?.map((status) => {
-            const isSelected = statusFilter === String(status.id);
+            const isSelected = statusFilter === status.id;
             return (
               <Chip
                 key={status.id}
                 mode={isSelected ? 'flat' : 'outlined'}
                 selected={isSelected}
-                onPress={() => setStatusFilter(String(status.id))}
+                onPress={() => setStatusFilter(status.id)}
                 style={isSelected ? styles.chipSelected : styles.chipUnselected}
                 textStyle={isSelected ? styles.chipTextSelected : styles.chipTextUnselected}
+                showSelectedOverlay={false}
               >
                 {status.name}
               </Chip>
@@ -94,7 +104,7 @@ export default function LeadsScreen() {
       {/* Clear Filters Shortcut */}
       {(search !== '' || statusFilter !== '') && (
         <View style={styles.clearContainer}>
-          <TouchableOpacity onPress={handleClearFilters}>
+          <TouchableOpacity onPress={handleClearFilters} activeOpacity={0.7}>
             <Text style={styles.clearText}>Clear filters</Text>
           </TouchableOpacity>
         </View>
@@ -103,7 +113,7 @@ export default function LeadsScreen() {
       {/* Leads List or First-load Loading Indicator */}
       {isLoading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#6750A4" />
+          <ActivityIndicator size="large" color={theme.colors.primary} />
         </View>
       ) : (
         <FlatList
@@ -116,7 +126,7 @@ export default function LeadsScreen() {
             />
           )}
           refreshControl={
-            <RefreshControl refreshing={isFetching} onRefresh={refetch} />
+            <RefreshControl refreshing={isFetching} onRefresh={refetch} tintColor={theme.colors.primary} />
           }
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={
@@ -124,6 +134,8 @@ export default function LeadsScreen() {
               icon="account-search"
               title="No leads found"
               subtitle="Try a different search or filter"
+              buttonText={(search !== '' || statusFilter !== '') ? "Clear filters" : undefined}
+              onPressButton={(search !== '' || statusFilter !== '') ? handleClearFilters : undefined}
             />
           }
         />
@@ -135,40 +147,50 @@ export default function LeadsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f8f8',
+    backgroundColor: theme.colors.background,
   },
   searchbar: {
-    margin: 16,
-    borderRadius: 8,
+    margin: theme.spacing.margin,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.roundness.xl,
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
   },
   chipsContainer: {
-    marginBottom: 8,
+    marginBottom: theme.spacing.gapSm,
   },
   chipsScroll: {
-    paddingHorizontal: 16,
-    gap: 8,
+    paddingHorizontal: theme.spacing.margin,
+    gap: theme.spacing.gapSm,
   },
   chipSelected: {
-    backgroundColor: '#6750A4',
+    backgroundColor: theme.colors.primary,
+    borderRadius: theme.roundness.md,
+    borderColor: theme.colors.primary,
   },
   chipUnselected: {
-    borderColor: '#e0e0e0',
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.borderSubtle,
+    borderRadius: theme.roundness.md,
   },
   chipTextSelected: {
-    color: '#ffffff',
+    ...theme.typography.labelSm,
+    color: theme.colors.onPrimary,
+    fontWeight: '600',
   },
   chipTextUnselected: {
-    color: '#666666',
+    ...theme.typography.labelSm,
+    color: theme.colors.onSurfaceVariant,
   },
   clearContainer: {
     alignItems: 'flex-end',
-    marginRight: 16,
-    marginBottom: 4,
+    marginRight: theme.spacing.margin,
+    marginBottom: theme.spacing.gapSm,
   },
   clearText: {
-    color: '#6750A4',
-    fontSize: 12,
-    fontWeight: '600',
+    color: theme.colors.primary,
+    ...theme.typography.labelSm,
+    fontWeight: '700',
   },
   loadingContainer: {
     flex: 1,
@@ -176,11 +198,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   listContent: {
-    paddingBottom: 24,
+    paddingBottom: theme.spacing.gapLg,
   },
   headerCount: {
-    fontSize: 14,
-    color: '#888888',
-    marginRight: 16,
+    ...theme.typography.labelSm,
+    color: theme.colors.textMuted,
+    marginRight: theme.spacing.paddingX,
   },
 });
+

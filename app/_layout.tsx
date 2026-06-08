@@ -1,16 +1,38 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, ActivityIndicator, StyleSheet, AppState, AppStateStatus } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { PaperProvider } from 'react-native-paper';
+import { PaperProvider, MD3LightTheme } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
 import * as Updates from 'expo-updates';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
+import { useCallStore } from '../store/callStore';
 import { ErrorBoundary } from '../components/ui/ErrorBoundary';
 import { OfflineBanner } from '../components/ui/OfflineBanner';
+import { PostCallModal } from '../components/ui/PostCallModal';
+import { startCallDetection } from '../services/callDetectionService';
+import { leadsService } from '../services/leadsService';
+import { theme } from '../constants/theme';
+
+const paperTheme = {
+  ...MD3LightTheme,
+  colors: {
+    ...MD3LightTheme.colors,
+    primary: theme.colors.primary,
+    secondary: theme.colors.secondary,
+    background: theme.colors.background,
+    surface: theme.colors.surface,
+    error: theme.colors.error,
+    outline: theme.colors.outline,
+    onPrimary: theme.colors.onPrimary,
+    onSecondary: theme.colors.onSecondary,
+    onSurface: theme.colors.onSurface,
+  },
+};
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -21,16 +43,106 @@ const queryClient = new QueryClient({
   },
 });
 
+// Normalize phone numbers to digits only for comparison
+function normalizePhone(phone: string): string {
+  return phone.replace(/\D/g, '').replace(/^0+/, '');
+}
+
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const { isAuthenticated, checkAuth, logout } = useAuthStore();
   const segments = useSegments();
   const router = useRouter();
   const addNotification = useNotificationStore((state) => state.addNotification);
+  const { pendingCall, setIncomingCall, setIncomingNumber, showModal } = useCallStore();
 
   const notificationListener = useRef<Notifications.Subscription | null>(null);
   const responseListener = useRef<Notifications.Subscription | null>(null);
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const backgroundedAtRef = useRef<number | null>(null);
+  const stopCallDetectionRef = useRef<(() => void) | null>(null);
 
+  // ─── Call detection (incoming calls) ────────────────────────────────────────
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    startCallDetection(async (event, rawNumber) => {
+      if (event === 'Incoming' && rawNumber) {
+        // Try to match the caller number against existing leads
+        setIncomingNumber(rawNumber);
+
+        try {
+          const { leads } = await leadsService.getAll({ search: rawNumber, limit: 5 });
+          const callerNumber = normalizePhone(rawNumber);
+          const matched = leads.find(
+            (l) => l.phone && normalizePhone(l.phone) === callerNumber
+          );
+
+          if (matched) {
+            setIncomingCall({
+              leadId: matched.id,
+              leadName: matched.name,
+              leadPhone: rawNumber,
+            });
+
+            // Fire a local notification so the user sees who is calling
+            await Notifications.scheduleNotificationAsync({
+              content: {
+                title: `📞 Incoming call — ${matched.name}`,
+                body: `Lead calling from ${rawNumber}`,
+                data: { lead_id: matched.id },
+                sound: true,
+              },
+              trigger: null,
+            });
+          }
+        } catch (err) {
+          console.warn('Lead lookup for caller failed:', err);
+        }
+      }
+
+      // When the call disconnects, show the post-call popup (if we have a context)
+      if (event === 'Disconnected') {
+        const call = useCallStore.getState().pendingCall;
+        if (call) {
+          showModal();
+        }
+      }
+    }).then((stop) => {
+      stopCallDetectionRef.current = stop;
+    });
+
+    return () => {
+      stopCallDetectionRef.current?.();
+      stopCallDetectionRef.current = null;
+    };
+  }, [isAuthenticated]);
+
+  // ─── AppState watcher (outgoing call fallback + iOS) ────────────────────────
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
+      const prev = appStateRef.current;
+      appStateRef.current = nextState;
+
+      if (prev === 'active' && nextState === 'background') {
+        backgroundedAtRef.current = Date.now();
+      }
+
+      if ((prev === 'background' || prev === 'inactive') && nextState === 'active') {
+        const bgTime = backgroundedAtRef.current;
+        backgroundedAtRef.current = null;
+        // Outgoing call: pendingCall already set when the user tapped the phone icon
+        // iOS incoming: CTCallCenter fires while in foreground only, so this handles
+        //               the case where the user returned after an iOS call
+        if (pendingCall && bgTime && Date.now() - bgTime > 5000) {
+          showModal();
+        }
+      }
+    });
+    return () => subscription.remove();
+  }, [pendingCall, showModal]);
+
+  // ─── Auth check ─────────────────────────────────────────────────────────────
   useEffect(() => {
     async function runCheckAuth() {
       setIsCheckingAuth(true);
@@ -60,9 +172,9 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     }
   }, [isAuthenticated, segments]);
 
+  // ─── Push notification listeners ────────────────────────────────────────────
   useEffect(() => {
     notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
-      console.log('Notification received:', notification);
       addNotification(notification);
     });
 
@@ -73,25 +185,30 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     });
 
     return () => {
-      if (notificationListener.current) {
-        notificationListener.current.remove();
-      }
-      if (responseListener.current) {
-        responseListener.current.remove();
-      }
+      notificationListener.current?.remove();
+      responseListener.current?.remove();
     };
   }, []);
 
   if (isCheckingAuth) {
     return (
       <View style={styles.splashContainer}>
-        <Text style={styles.splashTitle}>Perfex CRM</Text>
-        <ActivityIndicator size="large" color="#6750A4" style={styles.splashSpinner} />
+        <MaterialCommunityIcons name="forest" size={48} color={theme.colors.primary} style={styles.splashIcon} />
+        <Text style={styles.splashTitle}>ForestCRM</Text>
+        <Text style={styles.splashSubtitle}>Securing your workstation...</Text>
+        <View style={styles.splashSpinnerContainer}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+        </View>
       </View>
     );
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      <PostCallModal />
+    </>
+  );
 }
 
 export default function RootLayout() {
@@ -112,7 +229,7 @@ export default function RootLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <PaperProvider>
+      <PaperProvider theme={paperTheme}>
         <SafeAreaProvider>
           <ErrorBoundary>
             <AuthGuard>
@@ -129,17 +246,28 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   splashContainer: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: theme.colors.background,
     alignItems: 'center',
     justifyContent: 'center',
+    padding: theme.spacing.margin,
+  },
+  splashIcon: {
+    marginBottom: theme.spacing.gapSm,
   },
   splashTitle: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#000000',
-    marginBottom: 20,
+    ...theme.typography.headlineXl,
+    color: theme.colors.primary,
+    fontWeight: '700',
+    marginBottom: 4,
   },
-  splashSpinner: {
-    marginTop: 10,
+  splashSubtitle: {
+    ...theme.typography.bodyMd,
+    color: theme.colors.onSurfaceVariant,
+    opacity: 0.8,
+    marginBottom: theme.spacing.gapLg,
+    textAlign: 'center',
+  },
+  splashSpinnerContainer: {
+    marginTop: theme.spacing.gapSm,
   },
 });

@@ -1,54 +1,145 @@
 import { TouchableOpacity, View, StyleSheet } from 'react-native';
 import { Text, Chip } from 'react-native-paper';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Lead } from '../../services/leadsService';
+import { theme } from '../../constants/theme';
 
 interface Props {
   lead: Lead;
   onPress: () => void;
 }
 
-const getStatusColor = (status: string) => {
+const getStatusStyles = (status: string) => {
   const normalized = status.toLowerCase();
-  if (normalized.includes('new')) return '#e3f2fd';
-  if (normalized.includes('contact')) return '#fff8e1';
-  if (normalized.includes('qualif') || normalized.includes('custom') || normalized.includes('accept')) return '#e8f5e9';
-  if (normalized.includes('lost') || normalized.includes('junk') || normalized.includes('declin') || normalized.includes('expir')) return '#ffebee';
-  return '#f5f5f5';
+  if (normalized.includes('new') || normalized.includes('custom') || normalized.includes('accept') || normalized.includes('approv')) {
+    return { backgroundColor: '#cfebba', textColor: '#1b300f' }; // Light green tint
+  }
+  if (normalized.includes('contact') || normalized.includes('remind') || normalized.includes('pend')) {
+    return { backgroundColor: '#ffd8ed', textColor: '#290a21' }; // Pink tint
+  }
+  if (normalized.includes('lost') || normalized.includes('junk') || normalized.includes('declin') || normalized.includes('expir') || normalized.includes('fail')) {
+    return { backgroundColor: '#ffdad6', textColor: '#ba1a1a' }; // Red tint
+  }
+  return { backgroundColor: '#eeeeec', textColor: '#44483f' }; // Gray tint
 };
 
 export function LeadCard({ lead, onPress }: Props) {
+  const statusStyles = getStatusStyles(lead.status);
+  const formattedDate = new Date(lead.date_added).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  });
+
   return (
-    <TouchableOpacity onPress={onPress} style={styles.card}>
+    <TouchableOpacity onPress={onPress} style={styles.card} activeOpacity={0.9}>
+      {/* Header Row */}
       <View style={styles.row}>
-        <Text variant="titleSmall" style={styles.name}>{lead.name}</Text>
+        <Text style={styles.name}>{lead.name}</Text>
         <Chip
-          style={{ backgroundColor: getStatusColor(lead.status) }}
-          textStyle={{ fontSize: 11 }}
+          style={[styles.chip, { backgroundColor: statusStyles.backgroundColor }]}
+          textStyle={[styles.chipText, { color: statusStyles.textColor }]}
+          compact
         >
           {lead.status}
         </Chip>
       </View>
-      <Text variant="bodySmall" style={styles.meta}>{lead.email || 'No Email'}</Text>
-      <Text variant="bodySmall" style={styles.meta}>{lead.phone || 'No Phone'}</Text>
-      <Text variant="bodySmall" style={styles.date}>
-        Added {new Date(lead.date_added).toLocaleDateString()}
-      </Text>
+
+      {/* Meta Content */}
+      <View style={styles.metaContainer}>
+        <View style={styles.metaRow}>
+          <MaterialCommunityIcons name="email-outline" size={16} color={theme.colors.textMuted} style={styles.metaIcon} />
+          <Text style={styles.metaText} numberOfLines={1}>{lead.email || 'No Email'}</Text>
+        </View>
+        <View style={styles.metaRow}>
+          <MaterialCommunityIcons name="phone-outline" size={16} color={theme.colors.textMuted} style={styles.metaIcon} />
+          <Text style={styles.metaText} numberOfLines={1}>{lead.phone || 'No Phone'}</Text>
+        </View>
+      </View>
+
+      {/* Card Footer Divider Row */}
+      <View style={styles.footerRow}>
+        <Text style={styles.dateText}>Added {formattedDate}</Text>
+        <View style={styles.arrowButton}>
+          <MaterialCommunityIcons name="chevron-right" size={18} color={theme.colors.primary} />
+        </View>
+      </View>
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginHorizontal: 16,
-    marginVertical: 6,
-    borderWidth: 0.5,
-    borderColor: '#e0e0e0',
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.roundness.xl, // 24px
+    padding: 20,
+    marginHorizontal: theme.spacing.margin,
+    marginVertical: theme.spacing.gapSm,
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
+    shadowColor: theme.colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.02,
+    shadowRadius: 6,
+    elevation: 1,
   },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  name: { fontWeight: '600', flex: 1, marginRight: 8 },
-  meta: { color: '#666', marginTop: 2 },
-  date: { color: '#999', marginTop: 8, fontSize: 11 },
+  row: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    marginBottom: theme.spacing.gapMd,
+  },
+  name: { 
+    ...theme.typography.labelLg,
+    color: theme.colors.primary,
+    fontWeight: '700', 
+    flex: 1, 
+    marginRight: 8 
+  },
+  chip: {
+    borderRadius: theme.roundness.full,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  chipText: {
+    ...theme.typography.labelSm,
+    fontSize: 11,
+    lineHeight: 12,
+    fontWeight: '600',
+  },
+  metaContainer: {
+    gap: 8,
+    marginBottom: theme.spacing.gapMd,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  metaIcon: {
+    marginRight: 8,
+  },
+  metaText: { 
+    ...theme.typography.bodyMd,
+    color: theme.colors.onSurfaceVariant, 
+  },
+  footerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.surfaceContainer,
+    paddingTop: 12,
+  },
+  dateText: { 
+    ...theme.typography.labelSm,
+    color: theme.colors.textMuted, 
+  },
+  arrowButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: theme.colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

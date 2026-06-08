@@ -1,9 +1,10 @@
 import React from 'react';
-import { FlatList, View, StyleSheet } from 'react-native';
+import { FlatList, View, StyleSheet, Image } from 'react-native';
 import { Text, Button, Card, Avatar } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { useNotificationStore, NotificationItem } from '../../store/notificationStore';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { theme } from '../../constants/theme';
 
 export default function NotificationsScreen() {
   const { notifications, markAllRead } = useNotificationStore();
@@ -19,9 +20,9 @@ export default function NotificationsScreen() {
 
   const renderItem = ({ item }: { item: NotificationItem }) => {
     const isLead = !!item.data?.lead_id;
-    const iconName = isLead ? 'account-box' : 'file-document';
-    const iconBg = isLead ? '#E8F5E9' : '#EDE7F6';
-    const iconColor = isLead ? '#4CAF50' : '#6750A4';
+    const iconName = isLead ? 'account-outline' : 'file-document-outline';
+    const iconBg = isLead ? '#cfebba' : '#ffd8ed';
+    const iconColor = isLead ? '#1b300f' : '#290a21';
 
     return (
       <Card style={styles.card} onPress={() => handleNotificationPress(item)}>
@@ -52,9 +53,9 @@ export default function NotificationsScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text variant="headlineMedium" style={styles.title}>Notifications</Text>
+        <Text style={styles.title}>Notifications</Text>
         {notifications.length > 0 && (
-          <Button mode="text" onPress={markAllRead} textColor="#6750A4" style={styles.clearBtn}>
+          <Button mode="text" onPress={markAllRead} textColor={theme.colors.primary} style={styles.clearBtn} labelStyle={styles.clearBtnLabel}>
             Clear all
           </Button>
         )}
@@ -67,10 +68,22 @@ export default function NotificationsScreen() {
         contentContainerStyle={styles.listContainer}
         ListEmptyComponent={
           <EmptyState
-            icon="bell-off"
+            icon="bell-off-outline"
             title="No notifications yet"
             subtitle="Reminders and status updates will appear here"
           />
+        }
+        ListFooterComponent={
+          <View style={styles.footerPromo}>
+            <Image
+              source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCJgv1m8iGtPUfgZooIxXtKb1mUf_waWxPy8ntT906GbrbUAIV9MkN5tyO5FiEnDQWo1zuLYUfpzkxMPMUqH9Z09r2esr_36ZSiNB9HDndGnoOTYza6B8Upnel4FcTr3hiFBOjcdpHgf6aIF9ltkKmzxBrcC8KO8ik5IGRAoYcqvo9lOA0_1whUTapgb2I_r1f3gycqpD-vZbAhE1xZp_FiJt3AhQFUAJz8C5HUovQeNAdUrd7EK1qU_lyzFvxIMiTnXxbHLFbOb8Q' }}
+              style={styles.promoImage}
+            />
+            <View style={styles.promoOverlay}>
+              <Text style={styles.promoCategory}>WEEKLY DIGEST</Text>
+              <Text style={styles.promoText}>Your sales efficiency is up 12% this week.</Text>
+            </View>
+          </View>
         }
       />
     </View>
@@ -80,49 +93,93 @@ export default function NotificationsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: theme.colors.background,
     paddingTop: 56, // Push down past status bar
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 16,
+    paddingHorizontal: theme.spacing.margin,
+    marginBottom: theme.spacing.gapMd,
   },
   title: {
-    fontWeight: 'bold',
-    color: '#1A1A1A',
+    ...theme.typography.headlineLg,
+    fontWeight: '700',
+    color: theme.colors.primary,
   },
   clearBtn: {
     margin: 0,
   },
+  clearBtnLabel: {
+    ...theme.typography.labelMd,
+    fontWeight: '700',
+  },
   listContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 20,
+    paddingHorizontal: theme.spacing.margin,
+    paddingBottom: theme.spacing.gapLg,
   },
   card: {
-    marginBottom: 12,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+    marginBottom: theme.spacing.gapSm,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.roundness.xl,
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
+    shadowColor: theme.colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.01,
+    shadowRadius: 4,
   },
   cardTitle: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: '#212121',
+    ...theme.typography.labelMd,
+    fontWeight: '700',
+    color: theme.colors.primary,
   },
   cardSubtitle: {
-    fontSize: 13,
-    color: '#666',
+    ...theme.typography.bodyMd,
+    color: theme.colors.onSurfaceVariant,
   },
   timeText: {
-    fontSize: 11,
-    color: '#9E9E9E',
+    ...theme.typography.labelSm,
+    color: theme.colors.textMuted,
     marginRight: 16,
   },
+  footerPromo: {
+    marginTop: 24,
+    height: 180,
+    borderRadius: 24,
+    overflow: 'hidden',
+    position: 'relative',
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
+  },
+  promoImage: {
+    width: '100%',
+    height: '100%',
+    position: 'absolute',
+  },
+  promoOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(7, 27, 1, 0.45)', // Tinted overlay using primary dark forest green
+    justifyContent: 'flex-end',
+    padding: 20,
+  },
+  promoCategory: {
+    ...theme.typography.labelSm,
+    color: '#ffffff',
+    opacity: 0.8,
+    letterSpacing: 2,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  promoText: {
+    ...theme.typography.headlineMd,
+    color: '#ffffff',
+    fontWeight: '700',
+  },
 });
+

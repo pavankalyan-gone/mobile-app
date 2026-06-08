@@ -1,10 +1,20 @@
 import { useState, useEffect } from 'react';
-import { View, ScrollView, StyleSheet, TouchableOpacity, Linking } from 'react-native';
-import { Text, Chip, Divider, ActivityIndicator, Menu } from 'react-native-paper';
+import { View, ScrollView, StyleSheet, TouchableOpacity, Linking, TextInput, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { Text, Chip, Divider, ActivityIndicator, Menu, Button } from 'react-native-paper';
 import { useLocalSearchParams, Stack } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useLead, useLeadReminders, useUpdateLeadStatus, useLeadStatuses } from '../../hooks/useLeads';
+import {
+  useLead,
+  useLeadReminders,
+  useUpdateLeadStatus,
+  useLeadStatuses,
+  useMarkLeadLost,
+  useMarkLeadJunk,
+  useAddLeadNote,
+} from '../../hooks/useLeads';
+import { useCallStore } from '../../store/callStore';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { theme } from '../../constants/theme';
 
 export default function LeadDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -12,11 +22,15 @@ export default function LeadDetailScreen() {
   const { data: reminders } = useLeadReminders(Number(id));
   const { data: statuses } = useLeadStatuses();
   const updateStatusMutation = useUpdateLeadStatus();
+  const markLostMutation = useMarkLeadLost();
+  const markJunkMutation = useMarkLeadJunk();
+  const addNoteMutation = useAddLeadNote();
+  const setOutgoingCall = useCallStore((s) => s.setOutgoingCall);
 
   const [menuVisible, setMenuVisible] = useState(false);
   const [localStatus, setLocalStatus] = useState<string | null>(null);
+  const [noteText, setNoteText] = useState('');
 
-  // Sync local status when lead data changes (e.g. after a mutation resolves)
   useEffect(() => {
     if (lead) {
       setLocalStatus(null);
@@ -26,7 +40,7 @@ export default function LeadDetailScreen() {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#6750A4" />
+        <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
     );
   }
@@ -45,18 +59,16 @@ export default function LeadDetailScreen() {
 
   const getStatusStyles = (status: string) => {
     const normalized = status.toLowerCase();
-    if (normalized === 'new') return { backgroundColor: '#DBEAFE', color: '#1E40AF' };
-    if (normalized === 'contacted') return { backgroundColor: '#FEF3C7', color: '#92400E' };
-    if (normalized === 'qualified') return { backgroundColor: '#D1FAE5', color: '#065F46' };
-    if (normalized === 'lost') return { backgroundColor: '#FEE2E2', color: '#991B1B' };
-    
-    // Fallback checks
-    if (normalized.includes('new')) return { backgroundColor: '#DBEAFE', color: '#1E40AF' };
-    if (normalized.includes('contact')) return { backgroundColor: '#FEF3C7', color: '#92400E' };
-    if (normalized.includes('qualif') || normalized.includes('custom') || normalized.includes('accept')) return { backgroundColor: '#D1FAE5', color: '#065F46' };
-    if (normalized.includes('lost') || normalized.includes('junk') || normalized.includes('declin') || normalized.includes('expir')) return { backgroundColor: '#FEE2E2', color: '#991B1B' };
-    
-    return { backgroundColor: '#F3F4F6', color: '#374151' };
+    if (normalized.includes('new') || normalized.includes('custom') || normalized.includes('accept') || normalized.includes('approv')) {
+      return { backgroundColor: '#cfebba', color: '#1b300f' }; // Light forest tint
+    }
+    if (normalized.includes('contact') || normalized.includes('remind') || normalized.includes('pend')) {
+      return { backgroundColor: '#ffd8ed', color: '#290a21' }; // Light tertiary tint
+    }
+    if (normalized.includes('lost') || normalized.includes('junk') || normalized.includes('declin') || normalized.includes('expir') || normalized.includes('fail')) {
+      return { backgroundColor: '#ffdad6', color: '#ba1a1a' }; // Red error tint
+    }
+    return { backgroundColor: '#eeeeec', color: '#44483f' }; // Gray tint
   };
 
   const statusStyles = getStatusStyles(currentStatus);
@@ -72,255 +84,438 @@ export default function LeadDetailScreen() {
       {
         onError: (err) => {
           console.error('Failed to update status:', err);
-          setLocalStatus(null); // rollback on error
+          setLocalStatus(null);
         },
       }
     );
   };
 
+  const handleMarkLost = () => {
+    const isCurrentlyLost = lead.status?.toLowerCase().includes('lost');
+    Alert.alert(
+      isCurrentlyLost ? 'Unmark as Lost?' : 'Mark as Lost?',
+      isCurrentlyLost
+        ? 'Remove the lost flag from this lead?'
+        : 'Mark this lead as lost?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Confirm',
+          onPress: () => markLostMutation.mutate({ id: lead.id, lost: !isCurrentlyLost }),
+        },
+      ]
+    );
+  };
+
+  const handleMarkJunk = () => {
+    const isCurrentlyJunk = lead.status?.toLowerCase().includes('junk');
+    Alert.alert(
+      isCurrentlyJunk ? 'Unmark as Junk?' : 'Mark as Junk?',
+      isCurrentlyJunk
+        ? 'Remove the junk flag from this lead?'
+        : 'Mark this lead as junk/spam?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Confirm',
+          style: isCurrentlyJunk ? 'default' : 'destructive',
+          onPress: () => markJunkMutation.mutate({ id: lead.id, junk: !isCurrentlyJunk }),
+        },
+      ]
+    );
+  };
+
+  const handleAddNote = () => {
+    const text = noteText.trim();
+    if (!text) return;
+    setNoteText('');
+    addNoteMutation.mutate({ id: lead.id, description: text });
+  };
+
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '';
     const date = new Date(dateStr);
-    const dayNum = String(date.getDate()).padStart(2, '0');
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const monthName = months[date.getMonth()];
-    const year = date.getFullYear();
-    return `${dayNum} ${monthName} ${year}`;
+    return `${String(date.getDate()).padStart(2, '0')} ${months[date.getMonth()]} ${date.getFullYear()}`;
   };
 
   const formatDateTime = (dateStr: string) => {
     if (!dateStr) return '';
     const date = new Date(dateStr);
-    const dayNum = String(date.getDate()).padStart(2, '0');
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const monthName = months[date.getMonth()];
-    const year = date.getFullYear();
-    
     let hours = date.getHours();
     const minutes = String(date.getMinutes()).padStart(2, '0');
     const ampm = hours >= 12 ? 'PM' : 'AM';
-    hours = hours % 12;
-    hours = hours ? hours : 12;
-    const formattedHours = String(hours);
-    
-    return `${dayNum} ${monthName} ${year}, ${formattedHours}:${minutes} ${ampm}`;
+    hours = hours % 12 || 12;
+    return `${String(date.getDate()).padStart(2, '0')} ${months[date.getMonth()]} ${date.getFullYear()}, ${hours}:${minutes} ${ampm}`;
   };
 
+  const customFieldsWithValues = (lead.custom_fields || []).filter(
+    (f) => lead.custom_field_values?.[f.slug ?? f.name]
+  );
+
   return (
-    <ScrollView style={styles.container}>
-      <Stack.Screen options={{ title: 'Lead Details' }} />
-      
-      {/* Header Section */}
-      <View style={styles.header}>
-        <Text variant="headlineSmall" style={styles.title}>{lead.name}</Text>
-        <Menu
-          visible={menuVisible}
-          onDismiss={closeMenu}
-          anchor={
-            <Chip
-              onPress={openMenu}
-              style={[styles.statusChip, { backgroundColor: statusStyles.backgroundColor }]}
-              textStyle={{ color: statusStyles.color, fontWeight: '600' }}
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          headerTitle: 'Lead Details',
+          headerTitleStyle: { ...theme.typography.headlineMd, color: theme.colors.primary },
+          headerStyle: { backgroundColor: theme.colors.background },
+          headerShadowVisible: false,
+        }}
+      />
+      <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+        {/* Header Block */}
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <Text style={styles.title}>{lead.name}</Text>
+            {lead.title && <Text style={styles.leadTitleText}>{lead.title} at {lead.company}</Text>}
+          </View>
+          <Menu
+            visible={menuVisible}
+            onDismiss={closeMenu}
+            anchor={
+              <Chip
+                onPress={openMenu}
+                style={[styles.statusChip, { backgroundColor: statusStyles.backgroundColor }]}
+                textStyle={{ color: statusStyles.color, fontWeight: '700' }}
+                showSelectedOverlay={false}
+              >
+                {currentStatus.toUpperCase()}
+              </Chip>
+            }
+          >
+            {!statuses
+              ? <Menu.Item title="Loading…" disabled />
+              : statuses.map((s) => (
+                  <Menu.Item
+                    key={s.id}
+                    onPress={() => handleStatusSelect(s.id, s.name)}
+                    title={s.name}
+                  />
+                ))
+            }
+          </Menu>
+        </View>
+
+        {/* Contact Information Card */}
+        <View style={styles.card}>
+          <Text style={styles.cardSectionLabel}>Contact</Text>
+          {lead.email ? (
+            <TouchableOpacity style={styles.contactRow} onPress={() => Linking.openURL('mailto:' + lead.email)} activeOpacity={0.7}>
+              <MaterialCommunityIcons name="email-outline" size={20} color={theme.colors.primary} style={styles.contactIcon} />
+              <Text style={styles.contactText}>{lead.email}</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.contactRow}>
+              <MaterialCommunityIcons name="email-outline" size={20} color={theme.colors.textMuted} style={styles.contactIcon} />
+              <Text style={[styles.contactText, { color: theme.colors.textMuted }]}>No Email</Text>
+            </View>
+          )}
+
+          {lead.phone ? (
+            <TouchableOpacity
+              style={styles.contactRow}
+              activeOpacity={0.7}
+              onPress={() => {
+                setOutgoingCall({ leadId: lead.id, leadName: lead.name, leadPhone: lead.phone });
+                Linking.openURL('tel:' + lead.phone);
+              }}
             >
-              {currentStatus.toUpperCase()}
-            </Chip>
-          }
-        >
-          {statuses?.map((s) => (
-            <Menu.Item
-              key={s.id}
-              onPress={() => handleStatusSelect(s.id, s.name)}
-              title={s.name}
-            />
-          ))}
-        </Menu>
-      </View>
-      <Divider />
-
-      {/* Contact Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionLabel}>Contact</Text>
-        {lead.email ? (
-          <TouchableOpacity
-            style={styles.contactRow}
-            onPress={() => Linking.openURL('mailto:' + lead.email)}
-          >
-            <MaterialCommunityIcons name="email-outline" size={20} color="#757575" style={styles.contactIcon} />
-            <Text style={styles.contactText}>{lead.email}</Text>
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.contactRow}>
-            <MaterialCommunityIcons name="email-outline" size={20} color="#bdbdbd" style={styles.contactIcon} />
-            <Text style={[styles.contactText, { color: '#bdbdbd' }]}>No Email</Text>
-          </View>
-        )}
-
-        {lead.phone ? (
-          <TouchableOpacity
-            style={styles.contactRow}
-            onPress={() => Linking.openURL('tel:' + lead.phone)}
-          >
-            <MaterialCommunityIcons name="phone-outline" size={20} color="#757575" style={styles.contactIcon} />
-            <Text style={styles.contactText}>{lead.phone}</Text>
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.contactRow}>
-            <MaterialCommunityIcons name="phone-outline" size={20} color="#bdbdbd" style={styles.contactIcon} />
-            <Text style={[styles.contactText, { color: '#bdbdbd' }]}>No Phone</Text>
-          </View>
-        )}
-      </View>
-      <Divider />
-
-      {/* Details Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionLabel}>Details</Text>
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Source</Text>
-          <Text style={styles.detailValue}>{lead.source || 'N/A'}</Text>
+              <MaterialCommunityIcons name="phone-outline" size={20} color={theme.colors.primary} style={styles.contactIcon} />
+              <Text style={styles.contactText}>{lead.phone}</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.contactRow}>
+              <MaterialCommunityIcons name="phone-outline" size={20} color={theme.colors.textMuted} style={styles.contactIcon} />
+              <Text style={[styles.contactText, { color: theme.colors.textMuted }]}>No Phone</Text>
+            </View>
+          )}
         </View>
 
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Assigned to</Text>
-          <Text style={styles.detailValue}>{lead.assigned_to || 'Unassigned'}</Text>
-        </View>
-
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Added on</Text>
-          <Text style={styles.detailValue}>{formatDate(lead.date_added)}</Text>
-        </View>
-
-        {lead.value !== null && lead.value !== undefined && (
+        {/* Details Card */}
+        <View style={styles.card}>
+          <Text style={styles.cardSectionLabel}>Details</Text>
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Value</Text>
-            <Text style={styles.detailValue}>₹{lead.value.toLocaleString('en-IN')}</Text>
+            <Text style={styles.detailLabel}>Source</Text>
+            <Text style={styles.detailValue}>{lead.source || 'N/A'}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Assigned to</Text>
+            <Text style={styles.detailValue}>{lead.assigned_to || 'Unassigned'}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Added on</Text>
+            <Text style={styles.detailValue}>{formatDate(lead.date_added)}</Text>
+          </View>
+          {lead.value !== null && lead.value !== undefined && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Value</Text>
+              <Text style={styles.detailValue}>₹{lead.value.toLocaleString('en-IN')}</Text>
+            </View>
+          )}
+          {lead.website ? (
+            <TouchableOpacity style={styles.detailRow} onPress={() => Linking.openURL(lead.website)} activeOpacity={0.7}>
+              <Text style={styles.detailLabel}>Website</Text>
+              <Text style={[styles.detailValue, { color: '#1e88e5' }]}>{lead.website}</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+
+        {/* Custom Fields Card */}
+        {customFieldsWithValues.length > 0 && (
+          <View style={styles.card}>
+            <Text style={styles.cardSectionLabel}>Custom Fields</Text>
+            {customFieldsWithValues.map((f) => (
+              <View key={f.id} style={styles.detailRow}>
+                <Text style={styles.detailLabel}>{f.name}</Text>
+                <Text style={styles.detailValue}>{lead.custom_field_values?.[f.slug ?? f.name]}</Text>
+              </View>
+            ))}
           </View>
         )}
-      </View>
-      <Divider />
 
-      {/* Tags Section */}
-      {lead.tags && lead.tags.length > 0 && (
-        <>
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Tags</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.tagsScroll}
-            >
+        {/* Tags Section */}
+        {lead.tags && lead.tags.length > 0 && (
+          <View style={styles.card}>
+            <Text style={styles.cardSectionLabel}>Tags</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tagsScroll}>
               {lead.tags.map((tag: string, index: number) => (
-                <Chip
-                  key={`${tag}-${index}`}
-                  mode="outlined"
-                  style={styles.tagChip}
-                  textStyle={styles.tagChipText}
-                >
+                <Chip key={`${tag}-${index}`} mode="outlined" style={styles.tagChip} textStyle={styles.tagChipText} showSelectedOverlay={false}>
                   {tag}
                 </Chip>
               ))}
             </ScrollView>
           </View>
-          <Divider />
-        </>
-      )}
-
-      {/* Reminders Section */}
-      <View style={[styles.section, { paddingBottom: 40 }]}>
-        <Text style={styles.sectionLabelBold}>Reminders</Text>
-        {!reminders || reminders.length === 0 ? (
-          <Text style={styles.emptyReminders}>No reminders</Text>
-        ) : (
-          reminders.map((reminder) => {
-            const bellColor = reminder.is_notified === 1 ? '#16A34A' : '#D97706';
-            return (
-              <View key={reminder.id} style={styles.reminderCard}>
-                <View style={styles.reminderHeader}>
-                  <MaterialCommunityIcons name="bell-outline" size={20} color={bellColor} />
-                  <Text style={styles.reminderDesc}>{reminder.description}</Text>
-                </View>
-                <Text style={styles.reminderDate}>{formatDateTime(reminder.date)}</Text>
-              </View>
-            );
-          })
         )}
-      </View>
-    </ScrollView>
+
+        {/* Reminders Card */}
+        <View style={styles.card}>
+          <Text style={styles.cardSectionLabelBold}>Reminders</Text>
+          {!reminders || reminders.length === 0 ? (
+            <Text style={styles.emptyText}>No reminders set</Text>
+          ) : (
+            reminders.map((reminder) => {
+              const bellColor = reminder.is_notified === 1 ? theme.colors.secondary : theme.colors.primary;
+              return (
+                <View key={reminder.id} style={styles.reminderCard}>
+                  <View style={styles.reminderHeader}>
+                    <MaterialCommunityIcons name="bell-outline" size={20} color={bellColor} />
+                    <Text style={styles.reminderDesc}>{reminder.description}</Text>
+                  </View>
+                  <Text style={styles.reminderDate}>{formatDateTime(reminder.date)}</Text>
+                </View>
+              );
+            })
+          )}
+        </View>
+
+        {/* Notes Card */}
+        <View style={styles.card}>
+          <Text style={styles.cardSectionLabelBold}>Notes</Text>
+          {!lead.notes || lead.notes.length === 0 ? (
+            <Text style={styles.emptyText}>No notes added yet</Text>
+          ) : (
+            lead.notes.map((note) => (
+              <View key={note.id} style={styles.noteCard}>
+                <View style={styles.noteHeader}>
+                  <Text style={styles.noteAuthor}>{note.staff_name || 'Staff'}</Text>
+                  <Text style={styles.noteDate}>{formatDateTime(note.dateadded)}</Text>
+                </View>
+                <Text style={styles.noteBody}>{note.description}</Text>
+              </View>
+            ))
+          )}
+
+          {/* Add note input */}
+          <View style={styles.commentInputRow}>
+            <TextInput
+              style={styles.commentInput}
+              value={noteText}
+              onChangeText={setNoteText}
+              placeholder="Add a note…"
+              placeholderTextColor={theme.colors.textMuted}
+              multiline
+            />
+            <TouchableOpacity
+              onPress={handleAddNote}
+              disabled={!noteText.trim() || addNoteMutation.isPending}
+              style={[styles.sendBtn, (!noteText.trim() || addNoteMutation.isPending) && { opacity: 0.4 }]}
+            >
+              {addNoteMutation.isPending ? (
+                <ActivityIndicator size={20} color={theme.colors.primary} />
+              ) : (
+                <MaterialCommunityIcons name="send" size={22} color={theme.colors.primary} />
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Attachments Card */}
+        {lead.attachments && lead.attachments.length > 0 && (
+          <View style={styles.card}>
+            <Text style={styles.cardSectionLabelBold}>Attachments</Text>
+            {lead.attachments.map((att) => (
+              <View key={att.id} style={styles.attachmentRow}>
+                <MaterialCommunityIcons name="paperclip" size={18} color={theme.colors.textMuted} />
+                <Text style={styles.attachmentName} numberOfLines={1}>{att.file_name}</Text>
+                <Text style={styles.attachmentDate}>{formatDate(att.dateadded)}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Activity Log Card */}
+        {lead.activity_log && lead.activity_log.length > 0 && (
+          <View style={styles.card}>
+            <Text style={styles.cardSectionLabelBold}>Activity Log</Text>
+            {lead.activity_log.map((entry) => (
+              <View key={entry.id} style={styles.activityRow}>
+                <View style={styles.activityDot} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.activityDesc}>{entry.description}</Text>
+                  <Text style={styles.activityDate}>{formatDateTime(entry.date)}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Actions Card */}
+        <View style={[styles.card, styles.actionsCard]}>
+          <Text style={styles.cardSectionLabel}>Actions</Text>
+          <View style={styles.actionsRow}>
+            <Button
+              mode="outlined"
+              icon={lead.status?.toLowerCase().includes('lost') ? "flag" : "flag-outline"}
+              onPress={handleMarkLost}
+              loading={markLostMutation.isPending}
+              disabled={markLostMutation.isPending || markJunkMutation.isPending}
+              textColor={theme.colors.primary}
+              style={[styles.actionBtn, { borderColor: theme.colors.primary }]}
+              labelStyle={styles.actionBtnLabel}
+            >
+              {lead.status?.toLowerCase().includes('lost') ? 'Unmark Lost' : 'Mark Lost'}
+            </Button>
+            <Button
+              mode="outlined"
+              icon={lead.status?.toLowerCase().includes('junk') ? "trash-can" : "trash-can-outline"}
+              onPress={handleMarkJunk}
+              loading={markJunkMutation.isPending}
+              disabled={markLostMutation.isPending || markJunkMutation.isPending}
+              textColor={theme.colors.error}
+              style={[styles.actionBtn, { borderColor: theme.colors.error }]}
+              labelStyle={styles.actionBtnLabel}
+            >
+              {lead.status?.toLowerCase().includes('junk') ? 'Unmark Junk' : 'Mark Junk'}
+            </Button>
+          </View>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: theme.colors.background,
+  },
+  scrollContent: {
+    paddingBottom: theme.spacing.gapLg,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
+    backgroundColor: theme.colors.background,
   },
   header: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: theme.spacing.margin,
+    paddingVertical: theme.spacing.gapMd,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     flexWrap: 'wrap',
     gap: 10,
   },
+  headerLeft: {
+    flex: 1,
+    marginRight: 8,
+  },
   title: {
-    fontWeight: 'bold',
-    flexShrink: 1,
-    color: '#1a1a1a',
+    ...theme.typography.headlineLg,
+    color: theme.colors.primary,
+    fontWeight: '700',
+  },
+  leadTitleText: {
+    ...theme.typography.bodyMd,
+    color: theme.colors.textMuted,
+    marginTop: 2,
   },
   statusChip: {
     alignSelf: 'center',
     height: 32,
+    borderRadius: theme.roundness.md,
     justifyContent: 'center',
   },
-  section: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+  card: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.roundness.xl,
+    padding: theme.spacing.paddingX,
+    marginHorizontal: theme.spacing.margin,
+    marginVertical: theme.spacing.gapSm,
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
+    shadowColor: theme.colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.01,
+    shadowRadius: 4,
   },
-  sectionLabel: {
-    fontSize: 14,
-    color: '#888888',
-    marginBottom: 12,
-    fontWeight: 'bold',
+  actionsCard: {
+    marginBottom: theme.spacing.gapLg,
   },
-  sectionLabelBold: {
-    fontSize: 14,
-    color: '#1a1a1a',
+  cardSectionLabel: {
+    ...theme.typography.labelSm,
+    color: theme.colors.textMuted,
     marginBottom: 12,
-    fontWeight: 'bold',
+    fontWeight: '700',
+  },
+  cardSectionLabelBold: {
+    ...theme.typography.labelMd,
+    color: theme.colors.primary,
+    marginBottom: 12,
+    fontWeight: '700',
   },
   contactRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 10,
   },
   contactIcon: {
     marginRight: 12,
   },
   contactText: {
-    fontSize: 16,
-    color: '#1e88e5',
+    ...theme.typography.bodyLg,
+    color: theme.colors.primary,
+    fontWeight: '600',
   },
   detailRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 6,
+    paddingVertical: 8,
   },
   detailLabel: {
-    color: '#888888',
-    width: 120,
-    fontSize: 15,
+    ...theme.typography.bodyMd,
+    color: theme.colors.textMuted,
+    width: 110,
   },
   detailValue: {
     flex: 1,
-    color: '#1a1a1a',
-    fontSize: 15,
+    ...theme.typography.bodyMd,
+    color: theme.colors.onSurface,
+    fontWeight: '500',
   },
   tagsScroll: {
     gap: 6,
@@ -328,20 +523,29 @@ const styles = StyleSheet.create({
   tagChip: {
     height: 28,
     justifyContent: 'center',
-    borderColor: '#e0e0e0',
+    borderColor: theme.colors.borderSubtle,
+    borderRadius: theme.roundness.md,
   },
   tagChipText: {
+    ...theme.typography.labelSm,
     fontSize: 11,
     lineHeight: 12,
-    color: '#666666',
+    color: theme.colors.onSurfaceVariant,
+  },
+  emptyText: {
+    ...theme.typography.bodyMd,
+    color: theme.colors.textMuted,
+    fontStyle: 'italic',
+    marginTop: 4,
+    marginBottom: 8,
   },
   reminderCard: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 8,
+    backgroundColor: theme.colors.surfaceContainerLow,
+    borderRadius: theme.roundness.md,
     padding: 12,
     marginBottom: 8,
-    borderWidth: 0.5,
-    borderColor: '#e0e0e0',
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
   },
   reminderHeader: {
     flexDirection: 'row',
@@ -350,20 +554,121 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   reminderDesc: {
-    fontSize: 13,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
+    ...theme.typography.bodyMd,
+    fontWeight: '700',
+    color: theme.colors.primary,
     flex: 1,
   },
   reminderDate: {
-    fontSize: 12,
-    color: '#888888',
+    ...theme.typography.labelSm,
+    color: theme.colors.textMuted,
     marginLeft: 28,
   },
-  emptyReminders: {
-    color: '#888888',
-    fontSize: 14,
-    fontStyle: 'italic',
-    marginTop: 4,
+  noteCard: {
+    backgroundColor: '#fffbeb', // Sticky note color variant
+    borderRadius: theme.roundness.md,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#fde68a',
+  },
+  noteHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  noteAuthor: {
+    ...theme.typography.labelSm,
+    fontWeight: '700',
+    color: '#92400E',
+  },
+  noteDate: {
+    ...theme.typography.labelSm,
+    fontSize: 10,
+    color: '#a16207',
+  },
+  noteBody: {
+    ...theme.typography.bodyMd,
+    color: theme.colors.onSurface,
+    lineHeight: 20,
+  },
+  commentInputRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 10,
+    marginTop: 10,
+  },
+  commentInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
+    borderRadius: theme.roundness.md,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    ...theme.typography.bodyMd,
+    color: theme.colors.onSurface,
+    maxHeight: 100,
+    backgroundColor: theme.colors.surfaceContainerLow,
+    textAlignVertical: 'top',
+  },
+  sendBtn: {
+    padding: 8,
+    marginBottom: 2,
+  },
+  attachmentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.borderSubtle,
+  },
+  attachmentName: {
+    flex: 1,
+    ...theme.typography.bodyMd,
+    color: theme.colors.onSurface,
+  },
+  attachmentDate: {
+    ...theme.typography.labelSm,
+    color: theme.colors.textMuted,
+  },
+  activityRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    paddingVertical: 8,
+  },
+  activityDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: theme.colors.primary,
+    marginTop: 6,
+  },
+  activityDesc: {
+    ...theme.typography.bodyMd,
+    color: theme.colors.onSurface,
+    lineHeight: 20,
+  },
+  activityDate: {
+    ...theme.typography.labelSm,
+    color: theme.colors.textMuted,
+    marginTop: 2,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    flexWrap: 'wrap',
+  },
+  actionBtn: {
+    borderRadius: theme.roundness.xl,
+    flex: 1,
+    minWidth: 140,
+    height: 48,
+    justifyContent: 'center',
+  },
+  actionBtnLabel: {
+    ...theme.typography.labelMd,
   },
 });
+

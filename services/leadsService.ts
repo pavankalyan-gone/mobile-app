@@ -214,7 +214,7 @@ export const leadsService = {
   getAll: async (params?: GetLeadsParams): Promise<{ leads: Lead[]; page: number; total: number }> => {
     const { data: wrapper } = await perfexApi.get<any>('/leads', { params });
     const raw = wrapper.data || [];
-    return { leads: raw.map(translateLead), page: params?.page || 1, total: raw.length };
+    return { leads: raw.map(translateLead), page: params?.page || 1, total: wrapper.total ?? raw.length };
   },
 
   getById: async (id: number): Promise<LeadDetail> => {
@@ -291,8 +291,11 @@ export const leadsService = {
   },
 
   getStatuses: async (): Promise<{ id: number; name: string }[]> => {
-    const { data: wrapper } = await perfexApi.get<any>('/lead_statuses');
-    return (wrapper.data || []).map((s: any) => ({
+    interface LeadStatusRaw { id: string | number; name: string }
+    interface LeadStatusesResponse { data: LeadStatusRaw[] }
+    const { data: wrapper } = await perfexApi.get<LeadStatusesResponse>('/lead_statuses');
+    if (!Array.isArray(wrapper.data)) return [];
+    return wrapper.data.map((s) => ({
       id: Number(s.id),
       name: s.name,
     }));

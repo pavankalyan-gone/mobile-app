@@ -1,6 +1,7 @@
 import axios from 'axios';
-import * as SecureStore from 'expo-secure-store';
-import { PERFEX_API_URL, PERFEX_TOKEN_KEY } from '../constants/config';
+import * as SecureStore from '../utils/secureStore';
+import { PERFEX_API_URL, PERFEX_TOKEN_KEY, MOCK_MODE } from '../constants/config';
+import { mockAdapter } from '../utils/mockData';
 
 const perfexApi = axios.create({
   baseURL: PERFEX_API_URL,
@@ -10,6 +11,10 @@ const perfexApi = axios.create({
     'Accept': 'application/json',
   },
 });
+
+if (MOCK_MODE) {
+  perfexApi.defaults.adapter = mockAdapter as any;
+}
 
 perfexApi.interceptors.request.use(async (config) => {
   const token = await SecureStore.getItemAsync(PERFEX_TOKEN_KEY);
