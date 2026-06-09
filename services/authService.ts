@@ -2,7 +2,7 @@ import axios from 'axios';
 import estimatorApi from './estimatorApi';
 import perfexApi from './perfexApi';
 import * as SecureStore from '../utils/secureStore';
-import { ESTIMATOR_TOKEN_KEY, PERFEX_TOKEN_KEY } from '../constants/config';
+import { ESTIMATOR_TOKEN_KEY, PERFEX_TOKEN_KEY, ESTIMATOR_API_URL } from '../constants/config';
 
 export interface LoginPayload {
   email: string;
@@ -81,6 +81,10 @@ export const authService = {
 
   loginWithSSOToken: async (token: string): Promise<AuthResponse> => {
     let perfexToken = '';
+    let estToken = '';
+    let user: AuthUser = { id: 0, name: 'CRM User', email: '', role: 'staff' };
+
+    // 1. Exchange SSO token with Perfex CRM
     try {
       console.log('[authService] Attempting to exchange Web SSO token for Perfex CRM token...');
       const { data: exchangeData } = await perfexApi.post<any>('/auth/sso/exchange', { token });
@@ -88,19 +92,46 @@ export const authService = {
       if (!perfexToken) {
         throw new Error('SSO exchange response is missing access token');
       }
-      console.log('[authService] Web SSO token exchanged successfully.');
+      console.log('[authService] Web SSO token exchanged successfully with Perfex.');
     } catch (exchangeError: any) {
-      console.error('[authService] Web SSO exchange failed:', exchangeError?.response?.data || exchangeError);
-      throw new Error(exchangeError?.response?.data?.error?.message || 'Access denied. Web SSO exchange failed.');
+      console.error('[authService] Web SSO exchange with Perfex failed:', exchangeError?.response?.data || exchangeError);
+      throw new Error(exchangeError?.response?.data?.error?.message || 'Access denied. Web SSO exchange with Perfex failed.');
     }
 
-    await SecureStore.setItemAsync(PERFEX_TOKEN_KEY, perfexToken);
+    // 2. Exchange SSO token with Estimator App
+    try {
+      console.log('[authService] Attempting to exchange Web SSO token for Estimator token...');
+      const estimatorBaseUrl = ESTIMATOR_API_URL.replace(/\/api\/?$/, '');
+      const ssoCallbackUrl = `${estimatorBaseUrl}/sso/callback?token=${encodeURIComponent(token)}`;
+      const { data: estData } = await estimatorApi.get<any>(ssoCallbackUrl, {
+        headers: { Accept: 'application/json' }
+      });
+      
+      estToken = estData.token || estData.data?.token || '';
+      if (estToken) {
+        console.log('[authService] Web SSO token exchanged successfully with Estimator.');
+        if (estData.user) {
+          user = {
+            id: estData.user.id || 0,
+            name: estData.user.name || 'CRM User',
+            email: estData.user.email || '',
+            role: estData.user.role || 'staff',
+          };
+        }
+      }
+    } catch (estError: any) {
+      console.warn('[authService] Web SSO exchange with Estimator app failed or not available:', estError?.response?.data || estError);
+    }
 
-    // Provide a placeholder user for SSO since we might not have a `/me` endpoint immediately
-    const user: AuthUser = { id: 0, name: 'CRM User', email: '', role: 'staff' };
+    if (perfexToken) {
+      await SecureStore.setItemAsync(PERFEX_TOKEN_KEY, perfexToken);
+    }
+    if (estToken) {
+      await SecureStore.setItemAsync(ESTIMATOR_TOKEN_KEY, estToken);
+    }
 
     return {
-      estimatorToken: '', // SSO might not grant an estimator token yet
+      estimatorToken: estToken,
       perfexToken,
       user,
     };
