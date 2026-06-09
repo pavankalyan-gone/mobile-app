@@ -164,13 +164,15 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (isCheckingAuth) return;
+    
     const inAuthGroup = segments[0] === '(auth)';
     if (!isAuthenticated && !inAuthGroup) {
       router.replace('/(auth)/login');
     } else if (isAuthenticated && inAuthGroup) {
       router.replace('/(tabs)');
     }
-  }, [isAuthenticated, segments]);
+  }, [isAuthenticated, segments, isCheckingAuth]);
 
   // ─── Push notification listeners ────────────────────────────────────────────
   useEffect(() => {

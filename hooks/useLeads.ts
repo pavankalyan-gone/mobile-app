@@ -1,10 +1,20 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { leadsService, CreateLeadPayload, AddReminderPayload, GetLeadsParams } from '../services/leadsService';
 
 export const useLeads = (params?: GetLeadsParams) =>
-  useQuery({
+  useInfiniteQuery({
     queryKey: ['leads', params],
-    queryFn: () => leadsService.getAll(params),
+    queryFn: ({ pageParam = 1 }) => leadsService.getAll({ ...params, page: pageParam }),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => {
+      if (!lastPage) return undefined;
+      const limit = params?.limit || 20;
+      const totalPages = Math.ceil((lastPage.total || 0) / limit);
+      if (lastPage.page < totalPages) {
+        return lastPage.page + 1;
+      }
+      return undefined;
+    },
     staleTime: 1000 * 60 * 2,
   });
 

@@ -27,6 +27,9 @@ perfexApi.interceptors.response.use(
   async (error) => {
     if (error.response?.status === 401) {
       await SecureStore.deleteItemAsync(PERFEX_TOKEN_KEY);
+      // Force logout if the token is invalid or expired
+      const { useAuthStore } = require('../store/authStore');
+      useAuthStore.getState().logout();
     }
     return Promise.reject(error);
   }
