@@ -54,41 +54,28 @@ export const authService = {
       console.warn('Estimator API login failed or not available, proceeding with Perfex only');
     }
 
-    // Authenticate with Nexus Identity (Centralized SSO)
-    const { data: ssoData } = await axios.post<any>('https://login.onestudio.co.in/api/login', {
-      ...payload,
-      device_name: 'Mobile App',
-    });
-    
-    // Extract the raw SSO token
-    const ssoToken: string = ssoData.data?.access_token || ssoData.access_token || ssoData.data?.token || ssoData.token || '';
-    if (!ssoToken) {
-      throw new Error('No authentication token received from SSO.');
-    }
-
-    // Exchange the SSO token for a valid Perfex CRM token
+    // Authenticate directly with Perfex CRM
     let perfexToken = '';
     try {
-      console.log('[authService] Attempting to exchange SSO token for Perfex CRM token...');
-      const { data: exchangeData } = await perfexApi.post<any>('/auth/sso/exchange', { token: ssoToken });
-      perfexToken = exchangeData.data?.access_token || exchangeData.access_token || exchangeData.data?.token || exchangeData.token;
-      if (!perfexToken) {
-        throw new Error('SSO exchange response is missing access token');
-      }
-      console.log('[authService] SSO token exchanged successfully.');
-    } catch (exchangeError: any) {
-      console.error('[authService] SSO exchange failed:', exchangeError?.response?.data || exchangeError);
-      throw new Error(exchangeError?.response?.data?.error?.message || 'Access denied. SSO exchange failed.');
+      console.log('[authService] Attempting direct login to Perfex CRM...');
+      const { data: perfexWrapper } = await perfexApi.post<any>('/auth/login', payload);
+      perfexToken = perfexWrapper.data?.access_token || perfexWrapper.access_token || '';
+      console.log('[authService] Direct login successful.');
+    } catch (error) {
+      console.error('[authService] Direct login failed:', error);
+      throw error;
     }
 
     if (perfexToken) {
       await SecureStore.setItemAsync(PERFEX_TOKEN_KEY, perfexToken);
+    } else {
+      throw new Error('No authentication token received from Perfex CRM.');
     }
 
     return {
       estimatorToken: estToken,
       perfexToken,
-      user: ssoData.user || user,
+      user: user,
     };
   },
 

@@ -212,9 +212,18 @@ const translateLeadDetail = (raw: any, rest: any): LeadDetail => ({
 
 export const leadsService = {
   getAll: async (params?: GetLeadsParams): Promise<{ leads: Lead[]; page: number; total: number }> => {
-    const { data: wrapper } = await perfexApi.get<any>('/leads', { params });
-    const raw = wrapper.data || [];
-    return { leads: raw.map(translateLead), page: params?.page || 1, total: wrapper.total ?? raw.length };
+    try {
+      console.log(`[leadsService] Fetching leads with params:`, params);
+      const { data: wrapper } = await perfexApi.get<any>('/leads', { params });
+      console.log(`[leadsService] Raw API response wrapper:`, JSON.stringify(wrapper).substring(0, 300) + '...');
+      const raw = wrapper.data || [];
+      console.log(`[leadsService] Extracted raw data array length:`, raw.length);
+      const leads = raw.map(translateLead);
+      return { leads, page: params?.page || 1, total: wrapper.total ?? raw.length };
+    } catch (e: any) {
+      console.error(`[leadsService] Failed to fetch leads:`, e?.response?.data || e.message);
+      throw e;
+    }
   },
 
   getById: async (id: number): Promise<LeadDetail> => {
