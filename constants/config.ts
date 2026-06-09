@@ -10,12 +10,14 @@ const getDevHost = () => {
 const DEV_HOST = getDevHost();
 
 // Perfex CRM backend — handles leads, staff auth
-export const PERFEX_API_URL = 'https://crm.concept2designs.in/mobile_app/api';
+export const PERFEX_API_URL = __DEV__
+  ? `http://${DEV_HOST}:8000/mobile_app/api`
+  : 'https://crm.concept2designs.in/mobile_app/api';
 
 // Custom Estimator app backend — handles estimates, clients, products, reminders, device tokens
 export const ESTIMATOR_API_URL = __DEV__
-  ? `http://${DEV_HOST}:8001/api`
-  : 'https://your-estimator-app.com/api';
+  ? `http://${DEV_HOST}:8001`
+  : 'https://estimator.onestudio.co.in';
 
 // Separate SecureStore keys so each backend's token is stored independently
 export const PERFEX_TOKEN_KEY = 'perfex_auth_token';

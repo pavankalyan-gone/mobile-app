@@ -67,14 +67,18 @@ export const authService = {
     }
 
     // Exchange the SSO token for a valid Perfex CRM token
-    let perfexToken = ssoToken;
+    let perfexToken = '';
     try {
       console.log('[authService] Attempting to exchange SSO token for Perfex CRM token...');
       const { data: exchangeData } = await perfexApi.post<any>('/auth/sso/exchange', { token: ssoToken });
-      perfexToken = exchangeData.data?.access_token || exchangeData.access_token || exchangeData.data?.token || exchangeData.token || ssoToken;
+      perfexToken = exchangeData.data?.access_token || exchangeData.access_token || exchangeData.data?.token || exchangeData.token;
+      if (!perfexToken) {
+        throw new Error('SSO exchange response is missing access token');
+      }
       console.log('[authService] SSO token exchanged successfully.');
-    } catch (exchangeError) {
-      console.warn('[authService] /auth/sso/exchange failed or not available, falling back to raw SSO token.', exchangeError);
+    } catch (exchangeError: any) {
+      console.error('[authService] SSO exchange failed:', exchangeError?.response?.data || exchangeError);
+      throw new Error(exchangeError?.response?.data?.error?.message || 'Access denied. SSO exchange failed.');
     }
 
     if (perfexToken) {
@@ -89,14 +93,18 @@ export const authService = {
   },
 
   loginWithSSOToken: async (token: string): Promise<AuthResponse> => {
-    let perfexToken = token;
+    let perfexToken = '';
     try {
       console.log('[authService] Attempting to exchange Web SSO token for Perfex CRM token...');
       const { data: exchangeData } = await perfexApi.post<any>('/auth/sso/exchange', { token });
-      perfexToken = exchangeData.data?.access_token || exchangeData.access_token || exchangeData.data?.token || exchangeData.token || token;
+      perfexToken = exchangeData.data?.access_token || exchangeData.access_token || exchangeData.data?.token || exchangeData.token;
+      if (!perfexToken) {
+        throw new Error('SSO exchange response is missing access token');
+      }
       console.log('[authService] Web SSO token exchanged successfully.');
-    } catch (exchangeError) {
-      console.warn('[authService] /auth/sso/exchange failed or not available for Web SSO, falling back.', exchangeError);
+    } catch (exchangeError: any) {
+      console.error('[authService] Web SSO exchange failed:', exchangeError?.response?.data || exchangeError);
+      throw new Error(exchangeError?.response?.data?.error?.message || 'Access denied. Web SSO exchange failed.');
     }
 
     await SecureStore.setItemAsync(PERFEX_TOKEN_KEY, perfexToken);

@@ -48,7 +48,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     } catch (err: any) {
       console.error('[authStore] Login failed:', err);
       set({
-        error: err.response?.data?.message || 'Login failed. Check credentials.',
+        error: err.response?.data?.message || err.message || 'Login failed. Check credentials.',
         isLoading: false,
       });
     }
@@ -67,7 +67,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     } catch (err: any) {
       console.error('[authStore] SSO Login failed:', err);
       set({
-        error: 'SSO Login failed.',
+        error: err.response?.data?.message || err.message || 'SSO Login failed.',
         isLoading: false,
       });
     }
