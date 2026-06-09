@@ -1,6 +1,11 @@
 import { Platform } from 'react-native';
+import * as Device from 'expo-device';
 
 const getDevHost = () => {
+  // If running on a physical device, use the host computer's local IP on the network
+  if (Device.isDevice) {
+    return '192.168.31.51';
+  }
   if (Platform.OS === 'android') {
     return '10.0.2.2';
   }
