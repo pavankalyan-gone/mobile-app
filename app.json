@@ -38,7 +38,8 @@
           "color": "#6750A4",
           "androidMode": "default"
         }
-      ]
+      ],
+      "expo-font"
     ],
     "extra": {
       "eas": {
