@@ -1,20 +1,25 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { StyleSheet, View, Platform, TouchableOpacity, Image } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { Text, TextInput, Button, HelperText } from 'react-native-paper';
 import { Stack, useRouter } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 import { useAuthStore } from '../../store/authStore';
 import { theme } from '../../constants/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { PERFEX_API_URL } from '../../constants/config';
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [isSSOLoading, setIsSSOLoading] = useState(false);
 
-
-  const { login, isLoading, error, clearError } = useAuthStore();
+  const { login, handleSSOLogin, isLoading, error, clearError } = useAuthStore();
 
   const handleEmailChange = (text: string) => {
     setEmail(text);
@@ -27,12 +32,39 @@ export default function LoginScreen() {
   };
 
   const handleLogin = () => {
-    // Temporarily bypass real authentication for testing
-    useAuthStore.setState({
-      isAuthenticated: true,
-      user: { id: 1, name: 'Test User', email: email || 'test@example.com', role: 'admin' }
-    });
-    router.replace('/(tabs)');
+    // Standard email/password login
+    login(email, password);
+  };
+
+  const handleSSOPress = async () => {
+    setIsSSOLoading(true);
+    clearError();
+    try {
+      const response = await fetch(`${PERFEX_API_URL}/info`);
+      const data = await response.json();
+      
+      if (!data?.data?.auth?.sso_enabled) {
+        throw new Error('SSO is not enabled on the server.');
+      }
+      
+      const ssoUrl = data.data.auth.nexus_login_url;
+      
+      const result = await WebBrowser.openAuthSessionAsync(ssoUrl, 'perfex-mobile://auth/callback');
+      
+      if (result.type === 'success' && result.url) {
+        const urlParams = Linking.parse(result.url);
+        const token = urlParams.queryParams?.token || urlParams.queryParams?.access_token;
+        if (token) {
+          await handleSSOLogin(token as string);
+        } else {
+          throw new Error('No authentication token received from SSO.');
+        }
+      }
+    } catch (err: any) {
+      useAuthStore.setState({ error: err.message || 'Failed to authenticate via SSO' });
+    } finally {
+      setIsSSOLoading(false);
+    }
   };
 
   return (
@@ -67,13 +99,11 @@ export default function LoginScreen() {
         enableOnAndroid={true}
         bounces={false}
       >
-        {/* Minimalist Illustration */}
         <Image
           source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBI73TYbWJHtUSjVLXE_WhI4bLDaugrGVJyURGAljnQRM_HH5yL_Q4l-R-23UyAwe61mPD-nKBHZLIkh35SFfUFlbfp2Sia0wFNPDXQfrTatYOV1bkp830QFpIAgJgnomV6TVkiicUXzPVtnWobzlx03hRBpA8wELmDAMe2ZpOscGwxTMAawh4IZrHe-auMCu3A1N9IWOuMqgYT210Ujh0RXcVUHGL-ruUZe9vi1rYKraK3yyxDu6OulhM0CehdGH9cuH5qQ644raY' }}
           style={styles.illustration}
         />
 
-        {/* Input Fields */}
         <View style={styles.formContainer}>
           <TextInput
             label="Email"
@@ -124,7 +154,7 @@ export default function LoginScreen() {
             mode="contained"
             onPress={handleLogin}
             loading={isLoading}
-            disabled={isLoading}
+            disabled={isLoading || isSSOLoading}
             style={styles.button}
             contentStyle={styles.buttonContent}
             buttonColor={theme.colors.primary}
@@ -133,16 +163,22 @@ export default function LoginScreen() {
             Sign in
           </Button>
 
-          {/* Social login divider or custom actions */}
           <View style={styles.dividerRow}>
             <View style={styles.divider} />
             <Text style={styles.dividerText}>or</Text>
             <View style={styles.divider} />
           </View>
 
-          <TouchableOpacity style={styles.socialButton} activeOpacity={0.8}>
-            <MaterialCommunityIcons name="google" size={20} color={theme.colors.primary} style={styles.socialIcon} />
-            <Text style={styles.socialButtonText}>Continue with Google</Text>
+          <TouchableOpacity 
+            style={styles.socialButton} 
+            activeOpacity={0.8}
+            onPress={handleSSOPress}
+            disabled={isLoading || isSSOLoading}
+          >
+            <MaterialCommunityIcons name="shield-account-outline" size={20} color={theme.colors.primary} style={styles.socialIcon} />
+            <Text style={styles.socialButtonText}>
+              {isSSOLoading ? 'Connecting...' : 'Login with SSO'}
+            </Text>
           </TouchableOpacity>
         </View>
       </KeyboardAwareScrollView>

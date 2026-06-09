@@ -26,5 +26,5 @@ export const USER_STORAGE_KEY = 'auth_user';
 // bypass token for developer easy authentication
 export const DEVELOPMENT_BYPASS_TOKEN = 'k5QCB1qfJqW7DCP9KgFMuUnUsMhAkyQPAvDKQ5Le';
 
-export const MOCK_MODE = true;
+export const MOCK_MODE = false;
 

@@ -12,10 +12,10 @@ import {
   useMarkLeadLost,
   useMarkLeadJunk,
   useAddLeadNote,
-} from '../../hooks/useLeads';
-import { useCallStore } from '../../store/callStore';
-import { EmptyState } from '../../components/ui/EmptyState';
-import { theme } from '../../constants/theme';
+} from '../../../hooks/useLeads';
+import { useCallStore } from '../../../store/callStore';
+import { EmptyState } from '../../../components/ui/EmptyState';
+import { theme } from '../../../constants/theme';
 
 export default function LeadDetailScreen() {
   const router = useRouter();

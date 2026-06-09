@@ -22,7 +22,7 @@
       "package": "com.yourcompany.mobileapp",
       "versionCode": 1
     },
-    "scheme": "mobileapp",
+    "scheme": ["mobileapp", "perfex-mobile"],
     "web": {
       "bundler": "metro",
       "favicon": "./assets/favicon.png"

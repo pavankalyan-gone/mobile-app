@@ -62,6 +62,7 @@ export default function LeadsScreen() {
           <Text style={styles.headerSubtitle}>{totalCount ?? 0} Total Entries</Text>
         </View>
         <View style={styles.headerActions}>
+          <IconButton icon="bell-outline" size={24} iconColor={theme.colors.primary} onPress={() => {}} style={styles.headerIconBtn} />
           <IconButton icon="calendar-month" size={24} iconColor={theme.colors.primary} onPress={() => router.push('/(tabs)/calendar')} style={styles.headerIconBtn} />
           <IconButton icon="tune" size={24} iconColor={theme.colors.primary} onPress={() => setFilterModalVisible(true)} style={styles.headerIconBtn} />
           <IconButton icon="dots-vertical" size={24} iconColor={theme.colors.primary} style={styles.headerIconBtn} />
@@ -97,7 +98,6 @@ export default function LeadsScreen() {
       ) : (
         <FlashList
           data={allLeads}
-          estimatedItemSize={150}
           keyExtractor={(item) => String(item.id)}
           renderItem={({ item }) => (
             <LeadCard

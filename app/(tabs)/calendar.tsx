@@ -20,6 +20,7 @@ export default function CalendarScreen() {
           <Text style={styles.headerSubtitle}>{new Date().toDateString()}</Text>
         </View>
         <View style={styles.headerActions}>
+          <IconButton icon="bell-outline" size={24} iconColor={theme.colors.primary} onPress={() => {}} style={styles.headerIconBtn} />
           <IconButton icon="calendar-month" size={24} iconColor={theme.colors.primary} onPress={() => {}} style={styles.headerIconBtn} />
         </View>
       </View>

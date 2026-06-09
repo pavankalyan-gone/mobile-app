@@ -16,6 +16,7 @@ import { OfflineBanner } from '../components/ui/OfflineBanner';
 import { PostCallModal } from '../components/ui/PostCallModal';
 import { startCallDetection } from '../services/callDetectionService';
 import { leadsService } from '../services/leadsService';
+import { notificationService } from '../services/notificationService';
 import { theme } from '../constants/theme';
 
 const paperTheme = {
@@ -148,6 +149,9 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
       setIsCheckingAuth(true);
       try {
         await checkAuth();
+        if (useAuthStore.getState().isAuthenticated) {
+          notificationService.registerDeviceToken();
+        }
       } catch (error) {
         console.error('Network or session check failed on launch:', error);
         try {

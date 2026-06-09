@@ -40,6 +40,12 @@ export default function TabsLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="lead/[id]"
+        options={{
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }
