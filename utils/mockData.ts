@@ -1,169 +1,57 @@
 import { AxiosRequestConfig, AxiosResponse } from 'axios';
 
-// Mock State in memory
-let leads: any[] = [
-  {
-    id: "1",
-    name: "Jane Smith",
-    email: "janesmith@example.com",
-    phonenumber: "+1-555-0199",
-    company: "Acme Corporation",
-    status: "1",
-    status_name: "Customer",
-    title: "Director of Operations",
-    description: "Looking for CRM solution integration.",
-    country: "1",
-    zip: "10001",
-    city: "New York",
-    state: "NY",
-    address: "123 Broadway Ave",
-    assigned: "1",
-    dateadded: "2026-06-01 10:00:00",
-    from_form_id: "0",
-    source: "2",
-    lastcontact: "2026-06-05 14:30:00",
-    dateassigned: "2026-06-01 10:05:00",
-    last_status_change: "2026-06-01 10:00:00",
-    addedfrom: "1",
-    website: "www.acme.com",
-    lead_value: "15000.00",
-    public: "0",
-    client_id: "0",
-    hash: "abc123xyz",
-    notes: [
-      {
-        id: 1,
-        rel_id: "1",
-        rel_type: "lead",
-        description: "Followed up on estimate. Client requested a 10% discount.",
-        dateadded: "2026-06-05 14:30:00",
-        addedfrom: "1",
-        staff_name: "Jane Developer"
-      }
-    ],
-    attachments: [
-      {
-        id: 1,
-        file_name: "acme_requirements.pdf",
-        filetype: "application/pdf",
-        dateadded: "2026-06-01 10:10:00"
-      }
-    ],
-    reminders: [
-      {
-        id: 1,
-        rel_id: "1",
-        rel_type: "lead",
-        date: "2026-06-10 09:00:00",
-        description: "Call Jane to finalize agreement",
-        staff: "1",
-        notify_by_email: "1",
-        creator: "1",
-        isnotified: "0",
-        staff_name: "Jane Developer",
-        is_notified: 0
-      }
-    ],
-    activity_log: [
-      {
-        id: 1,
-        leadid: "1",
-        date: "2026-06-05 14:30:00",
-        description: "Mobile Check-in performed at 40.7128, -74.0060",
-        additional_data: null,
-        staffid: "1"
-      }
-    ],
-    custom_field_values: {
-      "1": "2026-08-01",
-      "2": "Gold"
-    },
-    tags: ["High Priority", "Enterprise"]
-  },
-  {
-    id: "2",
-    name: "John Doe",
-    email: "johndoe@example.com",
-    phonenumber: "+1-555-0122",
-    company: "Globex Corp",
-    status: "2",
-    status_name: "Lead",
-    title: "Project Lead",
-    description: "Interested in automated estimators.",
-    country: "1",
-    zip: "94016",
-    city: "San Francisco",
-    state: "CA",
-    address: "555 Market St",
-    assigned: "1",
-    dateadded: "2026-06-02 09:00:00",
-    from_form_id: "0",
-    source: "1",
-    lastcontact: null,
-    dateassigned: "2026-06-02 09:10:00",
-    last_status_change: "2026-06-02 09:00:00",
-    addedfrom: "1",
-    website: "www.globex.com",
-    lead_value: "8500.00",
-    public: "0",
-    client_id: "0",
-    hash: "def456uvw",
-    notes: [],
-    attachments: [],
-    reminders: [],
-    activity_log: [],
-    custom_field_values: {
-      "1": "2026-07-15",
-      "2": "Silver"
-    },
-    tags: ["Estimator Target"]
-  },
-  {
-    id: "3",
-    name: "Alice Johnson",
-    email: "alice@initech.com",
-    phonenumber: "+1-555-0133",
-    company: "Initech",
-    status: "3",
-    status_name: "Attempted to Contact",
-    title: "Product Manager",
-    description: "Wants a demonstration of custom API fields.",
-    country: "1",
-    zip: "78701",
-    city: "Austin",
-    state: "TX",
-    address: "412 Congress Ave",
-    assigned: "1",
-    dateadded: "2026-06-03 11:30:00",
-    from_form_id: "0",
-    source: "2",
-    lastcontact: "2026-06-04 10:00:00",
-    dateassigned: "2026-06-03 11:45:00",
-    last_status_change: "2026-06-04 10:00:00",
-    addedfrom: "1",
-    website: "www.initech.com",
-    lead_value: "22000.00",
-    public: "0",
-    client_id: "0",
-    hash: "ghi789rst",
-    notes: [
-      {
-        id: 2,
-        rel_id: "3",
-        rel_type: "lead",
-        description: "Sent introduction email.",
-        dateadded: "2026-06-04 10:00:00",
-        addedfrom: "1",
-        staff_name: "Jane Developer"
-      }
-    ],
-    attachments: [],
-    reminders: [],
-    activity_log: [],
-    custom_field_values: {},
-    tags: []
+const generateMockLeads = (count: number) => {
+  const generated: any[] = [];
+  const statuses = [
+    { id: '1', name: 'Customer' },
+    { id: '2', name: 'Lead' },
+    { id: '3', name: 'Attempted to Contact' },
+    { id: '4', name: 'Working' }
+  ];
+  const sources = ['1', '2', '3'];
+  
+  for (let i = 1; i <= count; i++) {
+    const statusObj = statuses[Math.floor(Math.random() * statuses.length)];
+    generated.push({
+      id: String(i),
+      name: `Lead ${i}`,
+      email: `lead${i}@example.com`,
+      phonenumber: `+1-555-${String(i).padStart(4, '0')}`,
+      company: `Company ${i}`,
+      status: statusObj.id,
+      status_name: statusObj.name,
+      title: `Role ${i}`,
+      description: `Description for lead ${i}`,
+      country: "1",
+      zip: "10001",
+      city: "New York",
+      state: "NY",
+      address: "123 Main St",
+      assigned: Math.random() > 0.5 ? "1" : "0",
+      dateadded: new Date(Date.now() - Math.floor(Math.random() * 10000000000)).toISOString().slice(0, 19).replace('T', ' '),
+      from_form_id: "0",
+      source: sources[Math.floor(Math.random() * sources.length)],
+      lastcontact: null,
+      dateassigned: null,
+      last_status_change: null,
+      addedfrom: "1",
+      website: `www.company${i}.com`,
+      lead_value: String(Math.floor(Math.random() * 50000)),
+      public: "0",
+      client_id: "0",
+      hash: `hash${i}`,
+      notes: [],
+      attachments: [],
+      reminders: [],
+      activity_log: [],
+      custom_field_values: {},
+      tags: []
+    });
   }
-];
+  return generated;
+};
+
+let leads: any[] = generateMockLeads(1000);
 
 let estimates: any[] = [
   {
@@ -341,6 +229,7 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
   if (cleanUrl.endsWith('/leads')) {
     // Implement simple local search & filtering if params are passed
     let filteredLeads = [...leads];
+    
     const search = config.params?.search;
     if (search) {
       const q = search.toLowerCase();
@@ -350,7 +239,47 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
         l.email.toLowerCase().includes(q)
       );
     }
-    return makeResponse({ status: true, data: filteredLeads });
+
+    const status = config.params?.status;
+    if (status) {
+      filteredLeads = filteredLeads.filter(l => l.status === String(status));
+    }
+
+    const assigned = config.params?.assigned;
+    if (assigned !== undefined && assigned !== '') {
+      if (assigned === 'me' || assigned === 1) {
+        filteredLeads = filteredLeads.filter(l => l.assigned === "1"); // Assuming 1 is current user
+      } else {
+        filteredLeads = filteredLeads.filter(l => l.assigned === String(assigned));
+      }
+    }
+
+    const sort = config.params?.sort;
+    const order = config.params?.order || 'desc';
+    if (sort) {
+       filteredLeads.sort((a, b) => {
+         const valA = a[sort];
+         const valB = b[sort];
+         if (valA < valB) return order === 'asc' ? -1 : 1;
+         if (valA > valB) return order === 'asc' ? 1 : -1;
+         return 0;
+       });
+    } else {
+       // default sort by dateadded desc
+       filteredLeads.sort((a, b) => new Date(b.dateadded).getTime() - new Date(a.dateadded).getTime());
+    }
+
+    const page = config.params?.page ? parseInt(config.params.page, 10) : 1;
+    const limit = config.params?.limit ? parseInt(config.params.limit, 10) : 20;
+
+    const start = (page - 1) * limit;
+    const paginatedLeads = filteredLeads.slice(start, start + limit);
+
+    return makeResponse({ 
+      status: true, 
+      data: paginatedLeads,
+      total: filteredLeads.length
+    });
   }
 
   // Single Lead Details

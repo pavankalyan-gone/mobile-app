@@ -26,7 +26,12 @@ perfexApi.interceptors.response.use(
   (response) => response,
   async (error) => {
     if (error.response?.status === 401) {
+      console.warn('[perfexApi] Received 401 Unauthorized from:', error.config?.url);
       await SecureStore.deleteItemAsync(PERFEX_TOKEN_KEY);
+      // Re-evaluate auth state (will logout only if both tokens are gone)
+      const { useAuthStore } = require('../store/authStore');
+      console.log('[perfexApi] Calling checkAuth() to re-evaluate session...');
+      useAuthStore.getState().checkAuth();
     }
     return Promise.reject(error);
   }

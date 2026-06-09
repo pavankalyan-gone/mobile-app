@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { View, ScrollView, StyleSheet, TouchableOpacity, Linking, TextInput, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { Text, Chip, Divider, ActivityIndicator, Menu, Button } from 'react-native-paper';
-import { useLocalSearchParams, Stack } from 'expo-router';
+import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import {
   useLead,
@@ -11,12 +12,13 @@ import {
   useMarkLeadLost,
   useMarkLeadJunk,
   useAddLeadNote,
-} from '../../hooks/useLeads';
-import { useCallStore } from '../../store/callStore';
-import { EmptyState } from '../../components/ui/EmptyState';
-import { theme } from '../../constants/theme';
+} from '../../../hooks/useLeads';
+import { useCallStore } from '../../../store/callStore';
+import { EmptyState } from '../../../components/ui/EmptyState';
+import { theme } from '../../../constants/theme';
 
 export default function LeadDetailScreen() {
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data: lead, isLoading } = useLead(Number(id));
   const { data: reminders } = useLeadReminders(Number(id));
@@ -155,49 +157,56 @@ export default function LeadDetailScreen() {
   );
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          headerTitle: 'Lead Details',
-          headerTitleStyle: { ...theme.typography.headlineMd, color: theme.colors.primary },
-          headerStyle: { backgroundColor: theme.colors.background },
-          headerShadowVisible: false,
-        }}
-      />
-      <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}>
+      <SafeAreaView style={styles.container}>
+        <Stack.Screen options={{ headerShown: false }} />
+        
         {/* Header Block */}
         <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <Text style={styles.title}>{lead.name}</Text>
-            {lead.title && <Text style={styles.leadTitleText}>{lead.title} at {lead.company}</Text>}
+          <View style={styles.headerTextContainer}>
+            <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 12 }}>
+              <MaterialCommunityIcons name="arrow-left" size={24} color={theme.colors.primary} />
+            </TouchableOpacity>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.headerTitle} numberOfLines={1}>{lead.name}</Text>
+              {(lead.title || lead.company) && (
+                <Text style={styles.headerSubtitle} numberOfLines={1}>
+                  {lead.title ? `${lead.title} ` : ''}
+                  {lead.company ? `at ${lead.company}` : ''}
+                </Text>
+              )}
+            </View>
           </View>
-          <Menu
-            visible={menuVisible}
-            onDismiss={closeMenu}
-            anchor={
-              <Chip
-                onPress={openMenu}
-                style={[styles.statusChip, { backgroundColor: statusStyles.backgroundColor }]}
-                textStyle={{ color: statusStyles.color, fontWeight: '700' }}
-                showSelectedOverlay={false}
-              >
-                {currentStatus.toUpperCase()}
-              </Chip>
-            }
-          >
-            {!statuses
-              ? <Menu.Item title="Loading…" disabled />
-              : statuses.map((s) => (
-                  <Menu.Item
-                    key={s.id}
-                    onPress={() => handleStatusSelect(s.id, s.name)}
-                    title={s.name}
-                  />
-                ))
-            }
-          </Menu>
+          <View style={styles.headerActions}>
+            <Menu
+              visible={menuVisible}
+              onDismiss={closeMenu}
+              anchor={
+                <Chip
+                  onPress={openMenu}
+                  style={[styles.statusChip, { backgroundColor: statusStyles.backgroundColor }]}
+                  textStyle={{ color: statusStyles.color, fontWeight: '700' }}
+                  showSelectedOverlay={false}
+                >
+                  {currentStatus.toUpperCase()}
+                </Chip>
+              }
+            >
+              {!statuses
+                ? <Menu.Item title="Loading…" disabled />
+                : statuses.map((s) => (
+                    <Menu.Item
+                      key={s.id}
+                      onPress={() => handleStatusSelect(s.id, s.name)}
+                      title={s.name}
+                    />
+                  ))
+              }
+            </Menu>
+          </View>
         </View>
+
+        <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
 
         {/* Contact Information Card */}
         <View style={styles.card}>
@@ -205,12 +214,12 @@ export default function LeadDetailScreen() {
           {lead.email ? (
             <TouchableOpacity style={styles.contactRow} onPress={() => Linking.openURL('mailto:' + lead.email)} activeOpacity={0.7}>
               <MaterialCommunityIcons name="email-outline" size={20} color={theme.colors.primary} style={styles.contactIcon} />
-              <Text style={styles.contactText}>{lead.email}</Text>
+              <Text style={styles.contactText} numberOfLines={1}>{lead.email}</Text>
             </TouchableOpacity>
           ) : (
             <View style={styles.contactRow}>
               <MaterialCommunityIcons name="email-outline" size={20} color={theme.colors.textMuted} style={styles.contactIcon} />
-              <Text style={[styles.contactText, { color: theme.colors.textMuted }]}>No Email</Text>
+              <Text style={[styles.contactText, { color: theme.colors.textMuted }]} numberOfLines={1}>No Email</Text>
             </View>
           )}
 
@@ -224,12 +233,12 @@ export default function LeadDetailScreen() {
               }}
             >
               <MaterialCommunityIcons name="phone-outline" size={20} color={theme.colors.primary} style={styles.contactIcon} />
-              <Text style={styles.contactText}>{lead.phone}</Text>
+              <Text style={styles.contactText} numberOfLines={1}>{lead.phone}</Text>
             </TouchableOpacity>
           ) : (
             <View style={styles.contactRow}>
               <MaterialCommunityIcons name="phone-outline" size={20} color={theme.colors.textMuted} style={styles.contactIcon} />
-              <Text style={[styles.contactText, { color: theme.colors.textMuted }]}>No Phone</Text>
+              <Text style={[styles.contactText, { color: theme.colors.textMuted }]} numberOfLines={1}>No Phone</Text>
             </View>
           )}
         </View>
@@ -412,7 +421,8 @@ export default function LeadDetailScreen() {
             </Button>
           </View>
         </View>
-      </ScrollView>
+        </ScrollView>
+      </SafeAreaView>
     </KeyboardAvoidingView>
   );
 }
@@ -432,27 +442,38 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
   },
   header: {
-    paddingHorizontal: theme.spacing.margin,
-    paddingVertical: theme.spacing.gapMd,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 10,
+    paddingHorizontal: theme.spacing.paddingX,
+    paddingTop: 16,
+    paddingBottom: 24,
+    backgroundColor: theme.colors.background,
   },
-  headerLeft: {
+  headerTextContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     flex: 1,
-    marginRight: 8,
+    marginRight: 12,
   },
-  title: {
-    ...theme.typography.headlineLg,
+  headerTitle: {
+    ...theme.typography.headlineXlMobile,
+    fontSize: 25,
     color: theme.colors.primary,
-    fontWeight: '700',
+    letterSpacing: -0.5,
   },
-  leadTitleText: {
-    ...theme.typography.bodyMd,
-    color: theme.colors.textMuted,
+  headerSubtitle: {
+    ...theme.typography.labelSm,
+    fontSize: 9,
+    color: 'rgba(68, 72, 63, 0.6)',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
     marginTop: 2,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 0,
+    alignItems: 'center',
   },
   statusChip: {
     alignSelf: 'center',
@@ -497,6 +518,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   contactText: {
+    flex: 1,
     ...theme.typography.bodyLg,
     color: theme.colors.primary,
     fontWeight: '600',

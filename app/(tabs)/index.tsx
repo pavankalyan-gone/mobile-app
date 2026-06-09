@@ -1,5 +1,5 @@
 import { ScrollView, View, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { Text } from 'react-native-paper';
+import { Text, IconButton } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -26,13 +26,13 @@ export default function DashboardScreen() {
     (r) => new Date(r.due_date).toDateString() === today && !r.is_read
   ).length ?? 0;
 
-  const totalLeads = leadsQuery.data?.total;
+  const totalLeads = leadsQuery.data?.pages?.[0]?.total;
   const isLeadsLoading = leadsQuery.isLoading;
 
   const pendingEstimates = estimatesQuery.data?.total;
   const isEstimatesLoading = estimatesQuery.isLoading;
 
-  const leads = leadsQuery.data?.leads?.slice(0, 5) || [];
+  const leads = leadsQuery.data?.pages?.flatMap(p => p.leads)?.slice(0, 5) || [];
   const estimates = estimatesQuery.data?.data?.slice(0, 5) || [];
 
   const formatTodayDate = () => {
@@ -50,26 +50,20 @@ export default function DashboardScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          title: 'Dashboard',
-          headerTitleStyle: { ...theme.typography.headlineMd, color: theme.colors.primary },
-          headerStyle: { backgroundColor: theme.colors.background },
-          headerShadowVisible: false,
-          headerRight: () => (
-            <TouchableOpacity onPress={logout} style={styles.logoutButton}>
-              <MaterialCommunityIcons name="logout" size={24} color={theme.colors.primary} />
-            </TouchableOpacity>
-          ),
-        }}
-      />
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Header Section */}
-        <View style={styles.header}>
-          <Text style={styles.greeting}>Hello, {user?.name}</Text>
-          <Text style={styles.date}>{formatTodayDate()}</Text>
+      <Stack.Screen options={{ headerShown: false }} />
+      <View style={styles.header}>
+        <View style={styles.headerTextContainer}>
+          <Text style={styles.headerTitle}>Hello, {user?.name}</Text>
+          <Text style={styles.headerSubtitle}>{formatTodayDate()}</Text>
         </View>
+        <View style={styles.headerActions}>
+          <IconButton icon="bell-outline" size={24} iconColor={theme.colors.primary} onPress={() => {}} style={styles.headerIconBtn} />
+          <IconButton icon="calendar-month" size={24} iconColor={theme.colors.primary} onPress={() => router.push('/(tabs)/calendar')} style={styles.headerIconBtn} />
+          <IconButton icon="logout" size={24} iconColor={theme.colors.primary} onPress={logout} style={styles.headerIconBtn} />
+        </View>
+      </View>
+
+      <ScrollView contentContainerStyle={styles.scrollContent}>
 
         {isLoading ? (
           <View style={styles.loadingContainer}>
@@ -170,19 +164,37 @@ const styles = StyleSheet.create({
     marginRight: theme.spacing.paddingX,
   },
   header: {
-    paddingHorizontal: theme.spacing.margin,
-    paddingTop: theme.spacing.gapMd,
-    paddingBottom: theme.spacing.gapSm,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: theme.spacing.paddingX,
+    paddingTop: 16,
+    paddingBottom: 24,
+    backgroundColor: theme.colors.background,
   },
-  greeting: {
-    ...theme.typography.headlineLg,
+  headerTextContainer: {
+    flexDirection: 'column',
+  },
+  headerTitle: {
+    ...theme.typography.headlineXlMobile,
+    fontSize: 25,
     color: theme.colors.primary,
-    fontWeight: '700',
+    letterSpacing: -0.5,
   },
-  date: {
+  headerSubtitle: {
     ...theme.typography.labelSm,
-    color: theme.colors.textMuted,
-    marginTop: 4,
+    fontSize: 9,
+    color: 'rgba(68, 72, 63, 0.6)',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 2,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 0,
+  },
+  headerIconBtn: {
+    margin: 0,
   },
   loadingContainer: {
     flex: 1,

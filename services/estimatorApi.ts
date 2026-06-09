@@ -26,7 +26,12 @@ estimatorApi.interceptors.response.use(
   (response) => response,
   async (error) => {
     if (error.response?.status === 401) {
+      console.warn('[estimatorApi] Received 401 Unauthorized from:', error.config?.url);
       await SecureStore.deleteItemAsync(ESTIMATOR_TOKEN_KEY);
+      // Re-evaluate auth state (will logout only if both tokens are gone)
+      const { useAuthStore } = require('../store/authStore');
+      console.log('[estimatorApi] Calling checkAuth() to re-evaluate session...');
+      useAuthStore.getState().checkAuth();
     }
     return Promise.reject(error);
   }

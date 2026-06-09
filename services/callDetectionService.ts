@@ -1,4 +1,5 @@
 import { Platform, PermissionsAndroid } from 'react-native';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 
 // react-native-call-detection types
 type CallEventType = 'Disconnected' | 'Dialing' | 'Incoming' | 'Connected' | 'Offhook';
@@ -25,6 +26,13 @@ async function requestAndroidPermission(): Promise<boolean> {
 
 export async function startCallDetection(onCallEvent: CallListener): Promise<() => void> {
   if (Platform.OS === 'web') {
+    return () => {};
+  }
+
+  // Check if we are running in Expo Go (StoreClient)
+  const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+  if (isExpoGo) {
+    console.warn('Call detection is disabled in Expo Go. Use a development build to enable call detection.');
     return () => {};
   }
 
@@ -59,3 +67,4 @@ export async function startCallDetection(onCallEvent: CallListener): Promise<() 
     } catch {}
   };
 }
+

@@ -32,9 +32,11 @@ export function LeadCard({ lead, onPress }: Props) {
 
   return (
     <TouchableOpacity onPress={onPress} style={styles.card} activeOpacity={0.9}>
-      {/* Header Row */}
-      <View style={styles.row}>
-        <Text style={styles.name}>{lead.name}</Text>
+      <View style={styles.topSection}>
+        <View style={styles.nameEmailContainer}>
+          <Text style={styles.name} numberOfLines={1}>{lead.name}</Text>
+          <Text style={styles.email} numberOfLines={1}>{lead.email || 'No Email'}</Text>
+        </View>
         <Chip
           style={[styles.chip, { backgroundColor: statusStyles.backgroundColor }]}
           textStyle={[styles.chipText, { color: statusStyles.textColor }]}
@@ -44,24 +46,12 @@ export function LeadCard({ lead, onPress }: Props) {
         </Chip>
       </View>
 
-      {/* Meta Content */}
-      <View style={styles.metaContainer}>
-        <View style={styles.metaRow}>
-          <MaterialCommunityIcons name="email-outline" size={16} color={theme.colors.textMuted} style={styles.metaIcon} />
-          <Text style={styles.metaText} numberOfLines={1}>{lead.email || 'No Email'}</Text>
+      <View style={styles.bottomSection}>
+        <View style={styles.phoneContainer}>
+          <MaterialCommunityIcons name="phone-outline" size={18} color={theme.colors.outline} />
+          <Text style={styles.phoneText} numberOfLines={1}>{lead.phone || 'No Phone'}</Text>
         </View>
-        <View style={styles.metaRow}>
-          <MaterialCommunityIcons name="phone-outline" size={16} color={theme.colors.textMuted} style={styles.metaIcon} />
-          <Text style={styles.metaText} numberOfLines={1}>{lead.phone || 'No Phone'}</Text>
-        </View>
-      </View>
-
-      {/* Card Footer Divider Row */}
-      <View style={styles.footerRow}>
-        <Text style={styles.dateText}>Added {formattedDate}</Text>
-        <View style={styles.arrowButton}>
-          <MaterialCommunityIcons name="chevron-right" size={18} color={theme.colors.primary} />
-        </View>
+        <Text style={styles.dateText}>{formattedDate}</Text>
       </View>
     </TouchableOpacity>
   );
@@ -70,30 +60,38 @@ export function LeadCard({ lead, onPress }: Props) {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: theme.colors.surface,
-    borderRadius: theme.roundness.xl, // 24px
-    padding: 20,
+    borderRadius: theme.roundness.lg, // 16px equivalent
+    padding: 24,
     marginHorizontal: theme.spacing.margin,
     marginVertical: theme.spacing.gapSm,
     borderWidth: 1,
-    borderColor: theme.colors.borderSubtle,
-    shadowColor: theme.colors.primary,
+    borderColor: 'rgba(196, 200, 188, 0.2)', // outlineVariant/20
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.02,
-    shadowRadius: 6,
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
     elevation: 1,
   },
-  row: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    marginBottom: theme.spacing.gapMd,
+  topSection: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 16,
   },
-  name: { 
-    ...theme.typography.labelLg,
+  nameEmailContainer: {
+    flex: 1,
+    marginRight: 16,
+    gap: 4,
+  },
+  name: {
+    ...theme.typography.headlineMd,
     color: theme.colors.primary,
-    fontWeight: '700', 
-    flex: 1, 
-    marginRight: 8 
+    fontWeight: '700',
+  },
+  email: {
+    ...theme.typography.bodyMd,
+    color: theme.colors.onSurfaceVariant,
+    opacity: 0.7,
   },
   chip: {
     borderRadius: theme.roundness.full,
@@ -105,41 +103,30 @@ const styles = StyleSheet.create({
     ...theme.typography.labelSm,
     fontSize: 11,
     lineHeight: 12,
-    fontWeight: '600',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  metaContainer: {
-    gap: 8,
-    marginBottom: theme.spacing.gapMd,
-  },
-  metaRow: {
+  bottomSection: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  metaIcon: {
-    marginRight: 8,
-  },
-  metaText: { 
-    ...theme.typography.bodyMd,
-    color: theme.colors.onSurfaceVariant, 
-  },
-  footerRow: {
-    flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: theme.colors.surfaceContainer,
-    paddingTop: 12,
+    borderTopColor: 'rgba(196, 200, 188, 0.1)', // outlineVariant/10
   },
-  dateText: { 
-    ...theme.typography.labelSm,
-    color: theme.colors.textMuted, 
-  },
-  arrowButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: theme.colors.background,
+  phoneContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 8,
+  },
+  phoneText: {
+    ...theme.typography.labelMd,
+    color: theme.colors.outline,
+  },
+  dateText: {
+    ...theme.typography.labelSm,
+    color: theme.colors.outline,
+    opacity: 0.6,
   },
 });

@@ -1,3 +1,4 @@
+import axios from 'axios';
 import estimatorApi from './estimatorApi';
 import perfexApi from './perfexApi';
 import * as SecureStore from '../utils/secureStore';
@@ -36,24 +37,77 @@ export const authService = {
    * Estimator token and Perfex token are stored separately.
    */
   login: async (payload: LoginPayload): Promise<AuthResponse> => {
-    // Authenticate with Estimator app
-    const { data: estData } = await estimatorApi.post<{
-      success: boolean;
-      user: AuthUser;
-      token: string;
-    }>('/login', payload);
-    await SecureStore.setItemAsync(ESTIMATOR_TOKEN_KEY, estData.token);
+    let estToken = '';
+    let user: AuthUser = { id: 0, name: 'User', email: payload.email, role: 'staff' };
+    
+    // Attempt to authenticate with Estimator app (may fail if local server is down)
+    try {
+      const { data: estData } = await estimatorApi.post<{
+        success: boolean;
+        user: AuthUser;
+        token: string;
+      }>('/login', payload);
+      estToken = estData.token;
+      user = estData.user;
+      await SecureStore.setItemAsync(ESTIMATOR_TOKEN_KEY, estToken);
+    } catch (error) {
+      console.warn('Estimator API login failed or not available, proceeding with Perfex only');
+    }
 
-    // Authenticate with Perfex CRM
-    const { data: perfexWrapper } = await perfexApi.post<any>('/auth/login', payload);
-    const perfexRaw = perfexWrapper.data;
-    const perfexToken: string = perfexRaw.access_token;
-    await SecureStore.setItemAsync(PERFEX_TOKEN_KEY, perfexToken);
+    // Authenticate with Nexus Identity (Centralized SSO)
+    const { data: ssoData } = await axios.post<any>('https://login.onestudio.co.in/api/login', {
+      ...payload,
+      device_name: 'Mobile App',
+    });
+    
+    // Extract the raw SSO token
+    const ssoToken: string = ssoData.data?.access_token || ssoData.access_token || ssoData.data?.token || ssoData.token || '';
+    if (!ssoToken) {
+      throw new Error('No authentication token received from SSO.');
+    }
+
+    // Exchange the SSO token for a valid Perfex CRM token
+    let perfexToken = ssoToken;
+    try {
+      console.log('[authService] Attempting to exchange SSO token for Perfex CRM token...');
+      const { data: exchangeData } = await perfexApi.post<any>('/auth/sso/exchange', { token: ssoToken });
+      perfexToken = exchangeData.data?.access_token || exchangeData.access_token || exchangeData.data?.token || exchangeData.token || ssoToken;
+      console.log('[authService] SSO token exchanged successfully.');
+    } catch (exchangeError) {
+      console.warn('[authService] /auth/sso/exchange failed or not available, falling back to raw SSO token.', exchangeError);
+    }
+
+    if (perfexToken) {
+      await SecureStore.setItemAsync(PERFEX_TOKEN_KEY, perfexToken);
+    }
 
     return {
-      estimatorToken: estData.token,
+      estimatorToken: estToken,
       perfexToken,
-      user: estData.user,
+      user: ssoData.user || user,
+    };
+  },
+
+  loginWithSSOToken: async (token: string): Promise<AuthResponse> => {
+    let perfexToken = token;
+    try {
+      console.log('[authService] Attempting to exchange Web SSO token for Perfex CRM token...');
+      const { data: exchangeData } = await perfexApi.post<any>('/auth/sso/exchange', { token });
+      perfexToken = exchangeData.data?.access_token || exchangeData.access_token || exchangeData.data?.token || exchangeData.token || token;
+      console.log('[authService] Web SSO token exchanged successfully.');
+    } catch (exchangeError) {
+      console.warn('[authService] /auth/sso/exchange failed or not available for Web SSO, falling back.', exchangeError);
+    }
+
+    await SecureStore.setItemAsync(PERFEX_TOKEN_KEY, perfexToken);
+
+    // Provide a placeholder user for SSO since we might not have a `/me` endpoint immediately
+    const user: AuthUser = { id: 0, name: 'CRM User', email: '', role: 'staff' };
+
+    return {
+      estimatorToken: '', // SSO might not grant an estimator token yet
+      perfexToken,
+      user,
     };
   },
 

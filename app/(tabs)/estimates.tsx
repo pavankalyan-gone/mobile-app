@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { FlatList, View, StyleSheet, RefreshControl, ScrollView } from 'react-native';
-import { ActivityIndicator, Chip, Text } from 'react-native-paper';
+import { FlatList, View, StyleSheet, RefreshControl, ScrollView, TouchableOpacity } from 'react-native';
+import { ActivityIndicator, Chip, Text, IconButton } from 'react-native-paper';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, Stack } from 'expo-router';
 import { useEstimates } from '../../hooks/useEstimates';
@@ -31,18 +32,18 @@ export default function EstimatesScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          headerTitle: 'Estimates',
-          headerTitleStyle: { ...theme.typography.headlineMd, color: theme.colors.primary },
-          headerStyle: { backgroundColor: theme.colors.background },
-          headerShadowVisible: false,
-          headerRight: totalCount !== undefined ? () => (
-            <Text style={styles.headerCount}>{totalCount} estimates</Text>
-          ) : undefined,
-        }}
-      />
+      <Stack.Screen options={{ headerShown: false }} />
+      
+      <View style={styles.header}>
+        <View style={styles.headerTextContainer}>
+          <Text style={styles.headerTitle}>Estimates</Text>
+          <Text style={styles.headerSubtitle}>{totalCount ?? 0} Total Entries</Text>
+        </View>
+        <View style={styles.headerActions}>
+          <IconButton icon="bell-outline" size={24} iconColor={theme.colors.primary} onPress={() => {}} style={styles.headerIconBtn} />
+          <IconButton icon="calendar-month" size={24} iconColor={theme.colors.primary} onPress={() => router.push('/(tabs)/calendar')} style={styles.headerIconBtn} />
+        </View>
+      </View>
 
       <View style={styles.chipsContainer}>
         <ScrollView
@@ -106,6 +107,39 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.background,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: theme.spacing.paddingX,
+    paddingTop: 16,
+    paddingBottom: 24,
+    backgroundColor: theme.colors.background,
+  },
+  headerTextContainer: {
+    flexDirection: 'column',
+  },
+  headerTitle: {
+    ...theme.typography.headlineXlMobile,
+    fontSize: 25,
+    color: theme.colors.primary,
+    letterSpacing: -0.5,
+  },
+  headerSubtitle: {
+    ...theme.typography.labelSm,
+    fontSize: 9,
+    color: 'rgba(68, 72, 63, 0.6)',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 2,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 0,
+  },
+  headerIconBtn: {
+    margin: 0,
   },
   chipsContainer: {
     marginBottom: theme.spacing.gapSm,

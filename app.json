@@ -22,7 +22,7 @@
       "package": "com.yourcompany.mobileapp",
       "versionCode": 1
     },
-    "scheme": "mobileapp",
+    "scheme": ["mobileapp", "perfex-mobile"],
     "web": {
       "bundler": "metro",
       "favicon": "./assets/favicon.png"
@@ -38,7 +38,8 @@
           "color": "#6750A4",
           "androidMode": "default"
         }
-      ]
+      ],
+      "expo-font"
     ],
     "extra": {
       "eas": {

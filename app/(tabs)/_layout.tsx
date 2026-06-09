@@ -32,12 +32,18 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="notifications"
+        name="calendar"
         options={{
-          title: 'Alerts',
+          title: 'Calendar',
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="bell-outline" size={size} color={color} />
+            <MaterialCommunityIcons name="calendar-month-outline" size={size} color={color} />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="lead/[id]"
+        options={{
+          href: null,
         }}
       />
     </Tabs>
