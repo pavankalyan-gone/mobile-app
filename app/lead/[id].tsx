@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
-import { View, ScrollView, StyleSheet, TouchableOpacity, Linking, TextInput, Alert, KeyboardAvoidingView, Platform } from 'react-native';
-import { Text, Chip, Divider, ActivityIndicator, Menu, Button } from 'react-native-paper';
+import { useState } from 'react';
+import { View, ScrollView, StyleSheet, TouchableOpacity, TextInput, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { Text, Chip, ActivityIndicator, Menu, Button } from 'react-native-paper';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -12,10 +12,13 @@ import {
   useMarkLeadLost,
   useMarkLeadJunk,
   useAddLeadNote,
-} from '../../../hooks/useLeads';
-import { useCallStore } from '../../../store/callStore';
-import { EmptyState } from '../../../components/ui/EmptyState';
-import { theme } from '../../../constants/theme';
+} from '../../hooks/useLeads';
+import { useCallStore } from '../../store/callStore';
+import { EmptyState } from '../../components/ui/EmptyState';
+import { getStatusStyles } from '../../utils/statusColors';
+import { formatDate, formatDateTime, formatINR } from '../../utils/format';
+import { openExternal } from '../../utils/linking';
+import { theme } from '../../constants/theme';
 
 export default function LeadDetailScreen() {
   const router = useRouter();
@@ -30,14 +33,7 @@ export default function LeadDetailScreen() {
   const setOutgoingCall = useCallStore((s) => s.setOutgoingCall);
 
   const [menuVisible, setMenuVisible] = useState(false);
-  const [localStatus, setLocalStatus] = useState<string | null>(null);
   const [noteText, setNoteText] = useState('');
-
-  useEffect(() => {
-    if (lead) {
-      setLocalStatus(null);
-    }
-  }, [lead]);
 
   if (isLoading) {
     return (
@@ -57,22 +53,9 @@ export default function LeadDetailScreen() {
     );
   }
 
-  const currentStatus = localStatus || lead.status || '';
-
-  const getStatusStyles = (status: string) => {
-    const normalized = status.toLowerCase();
-    if (normalized.includes('new') || normalized.includes('custom') || normalized.includes('accept') || normalized.includes('approv')) {
-      return { backgroundColor: '#cfebba', color: '#1b300f' }; // Light forest tint
-    }
-    if (normalized.includes('contact') || normalized.includes('remind') || normalized.includes('pend')) {
-      return { backgroundColor: '#ffd8ed', color: '#290a21' }; // Light tertiary tint
-    }
-    if (normalized.includes('lost') || normalized.includes('junk') || normalized.includes('declin') || normalized.includes('expir') || normalized.includes('fail')) {
-      return { backgroundColor: '#ffdad6', color: '#ba1a1a' }; // Red error tint
-    }
-    return { backgroundColor: '#eeeeec', color: '#44483f' }; // Gray tint
-  };
-
+  // Status comes straight from the query cache — the mutation hook applies
+  // the optimistic update, so no local mirror state is needed.
+  const currentStatus = lead.status || '';
   const statusStyles = getStatusStyles(currentStatus);
 
   const openMenu = () => setMenuVisible(true);
@@ -80,13 +63,11 @@ export default function LeadDetailScreen() {
 
   const handleStatusSelect = (statusId: number, statusName: string) => {
     closeMenu();
-    setLocalStatus(statusName);
     updateStatusMutation.mutate(
-      { id: lead.id, status: statusId },
+      { id: lead.id, status: statusId, statusName },
       {
-        onError: (err) => {
-          console.error('Failed to update status:', err);
-          setLocalStatus(null);
+        onError: () => {
+          Alert.alert('Update failed', 'Could not update the lead status. Please try again.');
         },
       }
     );
@@ -131,25 +112,15 @@ export default function LeadDetailScreen() {
     const text = noteText.trim();
     if (!text) return;
     setNoteText('');
-    addNoteMutation.mutate({ id: lead.id, description: text });
-  };
-
-  const formatDate = (dateStr: string) => {
-    if (!dateStr) return '';
-    const date = new Date(dateStr);
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return `${String(date.getDate()).padStart(2, '0')} ${months[date.getMonth()]} ${date.getFullYear()}`;
-  };
-
-  const formatDateTime = (dateStr: string) => {
-    if (!dateStr) return '';
-    const date = new Date(dateStr);
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    let hours = date.getHours();
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    hours = hours % 12 || 12;
-    return `${String(date.getDate()).padStart(2, '0')} ${months[date.getMonth()]} ${date.getFullYear()}, ${hours}:${minutes} ${ampm}`;
+    addNoteMutation.mutate(
+      { id: lead.id, description: text },
+      {
+        onError: () => {
+          setNoteText(text); // restore the user's text instead of losing it
+          Alert.alert('Note not saved', 'Check your connection and try again.');
+        },
+      }
+    );
   };
 
   const customFieldsWithValues = (lead.custom_fields || []).filter(
@@ -160,11 +131,16 @@ export default function LeadDetailScreen() {
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}>
       <SafeAreaView style={styles.container}>
         <Stack.Screen options={{ headerShown: false }} />
-        
+
         {/* Header Block */}
         <View style={styles.header}>
           <View style={styles.headerTextContainer}>
-            <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 12 }}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={{ marginRight: 12 }}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+            >
               <MaterialCommunityIcons name="arrow-left" size={24} color={theme.colors.primary} />
             </TouchableOpacity>
             <View style={{ flex: 1 }}>
@@ -187,6 +163,7 @@ export default function LeadDetailScreen() {
                   style={[styles.statusChip, { backgroundColor: statusStyles.backgroundColor }]}
                   textStyle={{ color: statusStyles.color, fontWeight: '700' }}
                   showSelectedOverlay={false}
+                  accessibilityLabel={`Status ${currentStatus}. Tap to change`}
                 >
                   {currentStatus.toUpperCase()}
                 </Chip>
@@ -212,7 +189,13 @@ export default function LeadDetailScreen() {
         <View style={styles.card}>
           <Text style={styles.cardSectionLabel}>Contact</Text>
           {lead.email ? (
-            <TouchableOpacity style={styles.contactRow} onPress={() => Linking.openURL('mailto:' + lead.email)} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={styles.contactRow}
+              onPress={() => openExternal('mailto:' + lead.email)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={`Email ${lead.email}`}
+            >
               <MaterialCommunityIcons name="email-outline" size={20} color={theme.colors.primary} style={styles.contactIcon} />
               <Text style={styles.contactText} numberOfLines={1}>{lead.email}</Text>
             </TouchableOpacity>
@@ -227,9 +210,11 @@ export default function LeadDetailScreen() {
             <TouchableOpacity
               style={styles.contactRow}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={`Call ${lead.phone}`}
               onPress={() => {
                 setOutgoingCall({ leadId: lead.id, leadName: lead.name, leadPhone: lead.phone });
-                Linking.openURL('tel:' + lead.phone);
+                openExternal('tel:' + lead.phone);
               }}
             >
               <MaterialCommunityIcons name="phone-outline" size={20} color={theme.colors.primary} style={styles.contactIcon} />
@@ -261,11 +246,17 @@ export default function LeadDetailScreen() {
           {lead.value !== null && lead.value !== undefined && (
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Value</Text>
-              <Text style={styles.detailValue}>₹{lead.value.toLocaleString('en-IN')}</Text>
+              <Text style={styles.detailValue}>{formatINR(lead.value)}</Text>
             </View>
           )}
           {lead.website ? (
-            <TouchableOpacity style={styles.detailRow} onPress={() => Linking.openURL(lead.website)} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={styles.detailRow}
+              onPress={() => openExternal(lead.website)}
+              activeOpacity={0.7}
+              accessibilityRole="link"
+              accessibilityLabel={`Open website ${lead.website}`}
+            >
               <Text style={styles.detailLabel}>Website</Text>
               <Text style={[styles.detailValue, { color: '#1e88e5' }]}>{lead.website}</Text>
             </TouchableOpacity>
@@ -346,11 +337,14 @@ export default function LeadDetailScreen() {
               placeholder="Add a note…"
               placeholderTextColor={theme.colors.textMuted}
               multiline
+              maxLength={2000}
             />
             <TouchableOpacity
               onPress={handleAddNote}
               disabled={!noteText.trim() || addNoteMutation.isPending}
               style={[styles.sendBtn, (!noteText.trim() || addNoteMutation.isPending) && { opacity: 0.4 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Save note"
             >
               {addNoteMutation.isPending ? (
                 <ActivityIndicator size={20} color={theme.colors.primary} />
@@ -464,7 +458,6 @@ const styles = StyleSheet.create({
   },
   headerSubtitle: {
     ...theme.typography.labelSm,
-    fontSize: 9,
     color: 'rgba(68, 72, 63, 0.6)',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -493,6 +486,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.01,
     shadowRadius: 4,
+    elevation: 1,
   },
   actionsCard: {
     marginBottom: theme.spacing.gapLg,
@@ -693,4 +687,3 @@ const styles = StyleSheet.create({
     ...theme.typography.labelMd,
   },
 });
-

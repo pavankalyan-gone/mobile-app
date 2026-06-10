@@ -1,0 +1,216 @@
+import { useState } from 'react';
+import { StyleSheet, View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import { TextInput, Button, HelperText } from 'react-native-paper';
+import { Stack, useRouter } from 'expo-router';
+import { useCreateLead } from '../../hooks/useLeads';
+import { theme } from '../../constants/theme';
+
+export default function NewLeadScreen() {
+  const router = useRouter();
+  const createLead = useCreateLead();
+
+  const [name, setName] = useState('');
+  const [company, setCompany] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [value, setValue] = useState('');
+  const [description, setDescription] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const handleSubmit = () => {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      setFormError('Name is required.');
+      return;
+    }
+    const trimmedEmail = email.trim();
+    if (trimmedEmail && !/^\S+@\S+\.\S+$/.test(trimmedEmail)) {
+      setFormError('Please enter a valid email address.');
+      return;
+    }
+    const leadValue = value.trim() ? Number(value.replace(/[^0-9.]/g, '')) : undefined;
+    if (value.trim() && (leadValue == null || isNaN(leadValue))) {
+      setFormError('Lead value must be a number.');
+      return;
+    }
+    setFormError(null);
+
+    createLead.mutate(
+      {
+        name: trimmedName,
+        company: company.trim() || undefined,
+        email: trimmedEmail || undefined,
+        phonenumber: phone.trim() || undefined,
+        lead_value: leadValue,
+        description: description.trim() || undefined,
+      },
+      {
+        onSuccess: (result) => {
+          if (result?.id) router.replace(`/lead/${result.id}`);
+          else router.back();
+        },
+        onError: (err: any) => {
+          setFormError(err?.response?.data?.message || 'Could not create the lead. Please try again.');
+        },
+      }
+    );
+  };
+
+  const inputTheme = { colors: { background: theme.colors.surface } };
+
+  return (
+    <>
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: 'New Lead',
+          headerTitleAlign: 'center',
+          headerStyle: { backgroundColor: theme.colors.background },
+          headerShadowVisible: false,
+          headerTitleStyle: { ...theme.typography.headlineMd, color: theme.colors.primary, fontWeight: '700' },
+        }}
+      />
+      <KeyboardAwareScrollView
+        style={styles.container}
+        contentContainerStyle={styles.inner}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        enableOnAndroid
+      >
+        <TextInput
+          label="Name *"
+          value={name}
+          onChangeText={setName}
+          mode="outlined"
+          style={styles.input}
+          outlineStyle={styles.inputOutline}
+          activeOutlineColor={theme.colors.primary}
+          theme={inputTheme}
+          maxLength={191}
+        />
+        <TextInput
+          label="Company"
+          value={company}
+          onChangeText={setCompany}
+          mode="outlined"
+          style={styles.input}
+          outlineStyle={styles.inputOutline}
+          activeOutlineColor={theme.colors.primary}
+          theme={inputTheme}
+          maxLength={191}
+        />
+        <TextInput
+          label="Email"
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoCorrect={false}
+          mode="outlined"
+          style={styles.input}
+          outlineStyle={styles.inputOutline}
+          activeOutlineColor={theme.colors.primary}
+          theme={inputTheme}
+          maxLength={191}
+        />
+        <TextInput
+          label="Phone"
+          value={phone}
+          onChangeText={setPhone}
+          keyboardType="phone-pad"
+          mode="outlined"
+          style={styles.input}
+          outlineStyle={styles.inputOutline}
+          activeOutlineColor={theme.colors.primary}
+          theme={inputTheme}
+          maxLength={32}
+        />
+        <TextInput
+          label="Lead value (₹)"
+          value={value}
+          onChangeText={setValue}
+          keyboardType="numeric"
+          mode="outlined"
+          style={styles.input}
+          outlineStyle={styles.inputOutline}
+          activeOutlineColor={theme.colors.primary}
+          theme={inputTheme}
+          maxLength={12}
+        />
+        <TextInput
+          label="Description"
+          value={description}
+          onChangeText={setDescription}
+          mode="outlined"
+          multiline
+          numberOfLines={4}
+          style={[styles.input, styles.multiline]}
+          outlineStyle={styles.inputOutline}
+          activeOutlineColor={theme.colors.primary}
+          theme={inputTheme}
+          maxLength={2000}
+        />
+
+        {formError && (
+          <HelperText type="error" visible style={styles.errorText}>
+            {formError}
+          </HelperText>
+        )}
+
+        <Button
+          mode="contained"
+          onPress={handleSubmit}
+          loading={createLead.isPending}
+          disabled={createLead.isPending}
+          style={styles.button}
+          contentStyle={styles.buttonContent}
+          buttonColor={theme.colors.primary}
+          textColor={theme.colors.onPrimary}
+        >
+          Create Lead
+        </Button>
+        <View style={styles.bottomSpacer} />
+      </KeyboardAwareScrollView>
+    </>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: theme.colors.background,
+  },
+  inner: {
+    paddingHorizontal: theme.spacing.margin,
+    paddingTop: theme.spacing.gapMd,
+  },
+  input: {
+    marginBottom: theme.spacing.gapMd,
+  },
+  multiline: {
+    minHeight: 96,
+  },
+  inputOutline: {
+    borderRadius: theme.roundness.xl,
+    borderColor: theme.colors.borderSubtle,
+    borderWidth: 1,
+  },
+  errorText: {
+    color: theme.colors.errorRed,
+    paddingHorizontal: 0,
+    marginBottom: theme.spacing.gapSm,
+  },
+  button: {
+    borderRadius: theme.roundness.xl,
+    marginTop: theme.spacing.gapSm,
+    height: 56,
+    justifyContent: 'center',
+  },
+  buttonContent: {
+    height: 56,
+  },
+  bottomSpacer: {
+    height: theme.spacing.gapLg,
+  },
+});

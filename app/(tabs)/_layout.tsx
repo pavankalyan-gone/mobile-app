@@ -1,9 +1,10 @@
 import { Tabs } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { theme } from '../../constants/theme';
 
 export default function TabsLayout() {
   return (
-    <Tabs screenOptions={{ tabBarActiveTintColor: '#6750A4' }}>
+    <Tabs screenOptions={{ tabBarActiveTintColor: theme.colors.primary }}>
       <Tabs.Screen
         name="index"
         options={{
@@ -38,12 +39,6 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="calendar-month-outline" size={size} color={color} />
           ),
-        }}
-      />
-      <Tabs.Screen
-        name="lead/[id]"
-        options={{
-          href: null,
         }}
       />
     </Tabs>

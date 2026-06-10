@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
-import { StyleSheet, View, Platform, TouchableOpacity, Image } from 'react-native';
+import { useState } from 'react';
+import { StyleSheet, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { Text, TextInput, Button, HelperText } from 'react-native-paper';
-import { Stack, useRouter } from 'expo-router';
+import { Stack } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
+import { TouchableOpacity } from 'react-native';
 import { useAuthStore } from '../../store/authStore';
 import { theme } from '../../constants/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -12,28 +13,41 @@ import { PERFEX_API_URL } from '../../constants/config';
 
 WebBrowser.maybeCompleteAuthSession();
 
+const EMAIL_RE = /^\S+@\S+\.\S+$/;
+
 export default function LoginScreen() {
-  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isSSOLoading, setIsSSOLoading] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const { login, handleSSOLogin, isLoading, error, clearError } = useAuthStore();
 
   const handleEmailChange = (text: string) => {
     setEmail(text);
+    setValidationError(null);
     clearError();
   };
 
   const handlePasswordChange = (text: string) => {
     setPassword(text);
+    setValidationError(null);
     clearError();
   };
 
   const handleLogin = () => {
-    // Standard email/password login
-    login(email, password);
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !password) {
+      setValidationError('Please enter your email and password.');
+      return;
+    }
+    if (!EMAIL_RE.test(trimmedEmail)) {
+      setValidationError('Please enter a valid email address.');
+      return;
+    }
+    setValidationError(null);
+    login(trimmedEmail, password);
   };
 
   const handleSSOPress = async () => {
@@ -42,15 +56,15 @@ export default function LoginScreen() {
     try {
       const response = await fetch(`${PERFEX_API_URL}/info`);
       const data = await response.json();
-      
+
       if (!data?.data?.auth?.sso_enabled) {
         throw new Error('SSO is not enabled on the server.');
       }
-      
+
       const ssoUrl = data.data.auth.nexus_login_url;
-      
+
       const result = await WebBrowser.openAuthSessionAsync(ssoUrl, 'perfex-mobile://auth/callback');
-      
+
       if (result.type === 'success' && result.url) {
         const urlParams = Linking.parse(result.url);
         const token = urlParams.queryParams?.token || urlParams.queryParams?.access_token;
@@ -67,6 +81,8 @@ export default function LoginScreen() {
     }
   };
 
+  const displayError = validationError || error;
+
   return (
     <>
       <Stack.Screen
@@ -77,32 +93,24 @@ export default function LoginScreen() {
           headerStyle: { backgroundColor: theme.colors.background },
           headerShadowVisible: false,
           headerTitleStyle: { ...theme.typography.headlineMd, color: theme.colors.primary, fontWeight: '700' },
-          headerLeft: () => (
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => {
-                if (router.canGoBack()) {
-                  router.back();
-                }
-              }}
-            >
-              <MaterialCommunityIcons name="arrow-left" size={24} color={theme.colors.primary} />
-            </TouchableOpacity>
-          ),
+          // Login is the navigation root — no back button
+          headerLeft: () => null,
         }}
       />
-      <KeyboardAwareScrollView 
+      <KeyboardAwareScrollView
         style={styles.container}
-        contentContainerStyle={styles.inner} 
-        keyboardShouldPersistTaps="handled" 
+        contentContainerStyle={styles.inner}
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         enableOnAndroid={true}
         bounces={false}
       >
-        <Image
-          source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBI73TYbWJHtUSjVLXE_WhI4bLDaugrGVJyURGAljnQRM_HH5yL_Q4l-R-23UyAwe61mPD-nKBHZLIkh35SFfUFlbfp2Sia0wFNPDXQfrTatYOV1bkp830QFpIAgJgnomV6TVkiicUXzPVtnWobzlx03hRBpA8wELmDAMe2ZpOscGwxTMAawh4IZrHe-auMCu3A1N9IWOuMqgYT210Ujh0RXcVUHGL-ruUZe9vi1rYKraK3yyxDu6OulhM0CehdGH9cuH5qQ644raY' }}
-          style={styles.illustration}
-        />
+        {/* Bundled brand mark instead of a hot-linked remote image */}
+        <View style={styles.logoCircle}>
+          <MaterialCommunityIcons name="forest" size={64} color={theme.colors.primary} />
+        </View>
+        <Text style={styles.appName}>ForestCRM</Text>
+        <Text style={styles.tagline}>Sign in to manage your leads and estimates</Text>
 
         <View style={styles.formContainer}>
           <TextInput
@@ -113,6 +121,7 @@ export default function LoginScreen() {
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
+            autoComplete="email"
             mode="outlined"
             style={styles.input}
             outlineStyle={styles.inputOutline}
@@ -128,6 +137,7 @@ export default function LoginScreen() {
             value={password}
             onChangeText={handlePasswordChange}
             secureTextEntry={!showPassword}
+            autoComplete="password"
             mode="outlined"
             style={styles.input}
             outlineStyle={styles.inputOutline}
@@ -140,13 +150,14 @@ export default function LoginScreen() {
                 icon={showPassword ? 'eye-off-outline' : 'eye-outline'}
                 color={theme.colors.textMuted}
                 onPress={() => setShowPassword(!showPassword)}
+                accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
               />
             }
           />
 
-          {error !== null && (
-            <HelperText type="error" visible={error !== null} style={styles.errorText}>
-              {error}
+          {displayError !== null && (
+            <HelperText type="error" visible style={styles.errorText}>
+              {displayError}
             </HelperText>
           )}
 
@@ -169,11 +180,13 @@ export default function LoginScreen() {
             <View style={styles.divider} />
           </View>
 
-          <TouchableOpacity 
-            style={styles.socialButton} 
+          <TouchableOpacity
+            style={styles.socialButton}
             activeOpacity={0.8}
             onPress={handleSSOPress}
             disabled={isLoading || isSSOLoading}
+            accessibilityRole="button"
+            accessibilityLabel="Login with SSO"
           >
             <MaterialCommunityIcons name="shield-account-outline" size={20} color={theme.colors.primary} style={styles.socialIcon} />
             <Text style={styles.socialButtonText}>
@@ -198,26 +211,28 @@ const styles = StyleSheet.create({
     paddingTop: 80,
     paddingBottom: 20,
   },
-  backButton: {
-    marginLeft: 8,
-  },
-  illustration: {
-    width: 240,
-    height: 160,
-    resizeMode: 'contain',
+  logoCircle: {
+    width: 112,
+    height: 112,
+    borderRadius: 56,
+    backgroundColor: '#cfebba',
+    alignItems: 'center',
+    justifyContent: 'center',
     alignSelf: 'center',
-    marginBottom: theme.spacing.gapLg,
+    marginBottom: theme.spacing.gapMd,
   },
-  title: {
+  appName: {
     ...theme.typography.headlineLg,
     color: theme.colors.primary,
     fontWeight: '700',
-    marginBottom: theme.spacing.gapSm,
+    textAlign: 'center',
+    marginBottom: 4,
   },
-  subtitle: {
-    ...theme.typography.bodyLg,
+  tagline: {
+    ...theme.typography.bodyMd,
     color: theme.colors.textMuted,
     textAlign: 'center',
+    marginBottom: theme.spacing.gapLg,
   },
   formContainer: {
     width: '100%',
@@ -282,4 +297,3 @@ const styles = StyleSheet.create({
     color: theme.colors.primary,
   },
 });
-

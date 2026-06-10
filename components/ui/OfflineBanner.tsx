@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { Text } from 'react-native-paper';
 import { useNetInfo } from '@react-native-community/netinfo';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,7 +15,8 @@ export const OfflineBanner: React.FC = () => {
   }
 
   return (
-    <View style={[styles.banner, { paddingTop: Platform.OS === 'ios' ? insets.top : 10 }]}>
+    // Android is edge-to-edge too, so respect the status bar inset on both platforms
+    <View style={[styles.banner, { paddingTop: insets.top + 4 }]}>
       <MaterialCommunityIcons name="wifi-off" size={16} color="#ffffff" style={styles.icon} />
       <Text style={styles.text}>
         You're offline — showing cached data
@@ -36,7 +37,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   icon: {
-    marginTop: Platform.OS === 'ios' ? 0 : 2,
+    marginTop: 0,
   },
   text: {
     ...theme.typography.labelSm,

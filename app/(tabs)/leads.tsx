@@ -1,13 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, RefreshControl, TouchableOpacity, TextInput } from 'react-native';
 import { ActivityIndicator, Chip, Text, Portal, Modal, IconButton, Button } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { FlashList } from '@shopify/flash-list';
+import { FlashList, ListRenderItemInfo } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, Stack } from 'expo-router';
 import { useLeads, useLeadStatuses } from '../../hooks/useLeads';
+import { Lead } from '../../services/leadsService';
 import { LeadCard } from '../../components/leads/LeadCard';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { ScreenHeader } from '../../components/ui/ScreenHeader';
+import { AppFab } from '../../components/ui/AppFab';
 import { theme } from '../../constants/theme';
 
 export default function LeadsScreen() {
@@ -19,6 +22,7 @@ export default function LeadsScreen() {
   const [assignedFilter, setAssignedFilter] = useState<number | 'me' | ''>('');
   const [sourceFilter, setSourceFilter] = useState<number | ''>('');
   const [sortFilter, setSortFilter] = useState<'dateadded' | 'name' | 'company' | ''>('');
+  const [refreshing, setRefreshing] = useState(false);
 
   // 400ms debounce on search input
   useEffect(() => {
@@ -29,17 +33,22 @@ export default function LeadsScreen() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  // Query leads with debounced search and status filter
-  const { data, isLoading, isFetching, refetch, fetchNextPage, hasNextPage, isFetchingNextPage } = useLeads({
+  // Query leads with debounced search and filters. '' means default
+  // (dateadded desc, applied server-side), so no sort params are sent.
+  const { data, isLoading, isError, refetch, fetchNextPage, hasNextPage, isFetchingNextPage } = useLeads({
     search: debouncedSearch || undefined,
     status: statusFilter || undefined,
     assigned: assignedFilter || undefined,
     source: sourceFilter || undefined,
     sort: sortFilter || undefined,
+    order: sortFilter ? 'asc' : undefined,
     limit: 20,
   });
 
   const { data: statuses } = useLeadStatuses();
+
+  const hasActiveFilters =
+    search !== '' || statusFilter !== '' || assignedFilter !== '' || sourceFilter !== '' || sortFilter !== '';
 
   const handleClearFilters = () => {
     setSearch('');
@@ -49,25 +58,45 @@ export default function LeadsScreen() {
     setSortFilter('');
   };
 
+  // Only show the pull-to-refresh spinner for user-initiated refreshes,
+  // not background refetches.
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await refetch();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refetch]);
+
+  const renderLead = useCallback(
+    ({ item }: ListRenderItemInfo<Lead>) => (
+      <LeadCard lead={item} onPress={() => router.push(`/lead/${item.id}`)} />
+    ),
+    [router]
+  );
+
   const totalCount = data?.pages[0]?.total;
-  const allLeads = data?.pages.flatMap(page => page.leads) ?? [];
+  const allLeads = data?.pages.flatMap((page) => page.leads) ?? [];
 
   return (
     <SafeAreaView style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      <View style={styles.header}>
-        <View style={styles.headerTextContainer}>
-          <Text style={styles.headerTitle}>Leads</Text>
-          <Text style={styles.headerSubtitle}>{totalCount ?? 0} Total Entries</Text>
-        </View>
-        <View style={styles.headerActions}>
-          <IconButton icon="bell-outline" size={24} iconColor={theme.colors.primary} onPress={() => {}} style={styles.headerIconBtn} />
-          <IconButton icon="calendar-month" size={24} iconColor={theme.colors.primary} onPress={() => router.push('/(tabs)/calendar')} style={styles.headerIconBtn} />
-          <IconButton icon="tune" size={24} iconColor={theme.colors.primary} onPress={() => setFilterModalVisible(true)} style={styles.headerIconBtn} />
-          <IconButton icon="dots-vertical" size={24} iconColor={theme.colors.primary} style={styles.headerIconBtn} />
-        </View>
-      </View>
+      <ScreenHeader
+        title="Leads"
+        subtitle={`${totalCount ?? 0} Total Entries`}
+        actions={
+          <IconButton
+            icon="tune"
+            size={24}
+            iconColor={theme.colors.primary}
+            onPress={() => setFilterModalVisible(true)}
+            style={styles.headerIconBtn}
+            accessibilityLabel="Filters"
+          />
+        }
+      />
 
       <View style={styles.searchContainer}>
         <MaterialCommunityIcons name="magnify" size={22} color={theme.colors.outline} style={styles.searchIcon} />
@@ -77,14 +106,14 @@ export default function LeadsScreen() {
           placeholderTextColor="rgba(116, 121, 110, 0.4)"
           value={search}
           onChangeText={setSearch}
+          accessibilityLabel="Search leads"
         />
       </View>
 
-
-      {/* Clear Filters Shortcut */}
-      {(search !== '' || statusFilter !== '') && (
+      {/* Clear Filters Shortcut — covers every active filter, not just search/status */}
+      {hasActiveFilters && (
         <View style={styles.clearContainer}>
-          <TouchableOpacity onPress={handleClearFilters} activeOpacity={0.7}>
+          <TouchableOpacity onPress={handleClearFilters} activeOpacity={0.7} accessibilityRole="button">
             <Text style={styles.clearText}>Clear filters</Text>
           </TouchableOpacity>
         </View>
@@ -99,14 +128,9 @@ export default function LeadsScreen() {
         <FlashList
           data={allLeads}
           keyExtractor={(item) => String(item.id)}
-          renderItem={({ item }) => (
-            <LeadCard
-              lead={item}
-              onPress={() => router.push(`/lead/${item.id}`)}
-            />
-          )}
+          renderItem={renderLead}
           refreshControl={
-            <RefreshControl refreshing={isFetching && !isFetchingNextPage} onRefresh={refetch} tintColor={theme.colors.primary} />
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.colors.primary} />
           }
           onEndReached={() => {
             if (hasNextPage && !isFetchingNextPage) {
@@ -121,21 +145,28 @@ export default function LeadsScreen() {
           }
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={
-            <EmptyState
-              icon="account-search"
-              title="No leads found"
-              subtitle="Try a different search or filter"
-              buttonText={(search !== '' || statusFilter !== '' || assignedFilter !== '') ? "Clear filters" : undefined}
-              onPressButton={(search !== '' || statusFilter !== '' || assignedFilter !== '') ? handleClearFilters : undefined}
-            />
+            isError ? (
+              <EmptyState
+                icon="wifi-off"
+                title="Couldn't load leads"
+                subtitle="Check your connection and try again"
+                buttonText="Retry"
+                onPressButton={() => refetch()}
+              />
+            ) : (
+              <EmptyState
+                icon="account-search"
+                title="No leads found"
+                subtitle="Try a different search or filter"
+                buttonText={hasActiveFilters ? 'Clear filters' : undefined}
+                onPressButton={hasActiveFilters ? handleClearFilters : undefined}
+              />
+            )
           }
         />
       )}
 
-      {/* Floating Action Button */}
-      <TouchableOpacity style={styles.fab} activeOpacity={0.8} onPress={() => {}}>
-        <MaterialCommunityIcons name="account-plus" size={24} color={theme.colors.onPrimary} />
-      </TouchableOpacity>
+      <AppFab icon="account-plus" onPress={() => router.push('/lead/new')} accessibilityLabel="Add lead" />
 
       <Portal>
         <Modal
@@ -144,7 +175,7 @@ export default function LeadsScreen() {
           contentContainerStyle={styles.modalContent}
         >
           <Text style={styles.modalTitle}>Advanced Filters</Text>
-          
+
           <Text style={styles.filterSectionTitle}>Status</Text>
           <View style={styles.filterOptions}>
             <Chip selected={statusFilter === ''} onPress={() => setStatusFilter('')} style={styles.filterOptionChip}>All</Chip>
@@ -177,7 +208,7 @@ export default function LeadsScreen() {
 
           <Text style={styles.filterSectionTitle}>Sort By</Text>
           <View style={styles.filterOptions}>
-            <Chip selected={sortFilter === ''} onPress={() => setSortFilter('')} style={styles.filterOptionChip}>Date Added</Chip>
+            <Chip selected={sortFilter === ''} onPress={() => setSortFilter('')} style={styles.filterOptionChip}>Newest First</Chip>
             <Chip selected={sortFilter === 'name'} onPress={() => setSortFilter('name')} style={styles.filterOptionChip}>Name</Chip>
             <Chip selected={sortFilter === 'company'} onPress={() => setSortFilter('company')} style={styles.filterOptionChip}>Company</Chip>
           </View>
@@ -195,36 +226,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.background,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: theme.spacing.paddingX,
-    paddingTop: 16,
-    paddingBottom: 24,
-    backgroundColor: theme.colors.background,
-  },
-  headerTextContainer: {
-    flexDirection: 'column',
-  },
-  headerTitle: {
-    ...theme.typography.headlineXlMobile,
-    fontSize: 25,
-    color: theme.colors.primary,
-    letterSpacing: -0.5,
-  },
-  headerSubtitle: {
-    ...theme.typography.labelSm,
-    fontSize: 9,
-    color: 'rgba(68, 72, 63, 0.6)', // onSurfaceVariant/60
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginTop: 2,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    gap: 0,
   },
   headerIconBtn: {
     margin: 0,
@@ -255,22 +256,6 @@ const styles = StyleSheet.create({
     ...theme.typography.bodyMd,
     color: theme.colors.onSurface,
     height: '100%',
-  },
-  fab: {
-    position: 'absolute',
-    bottom: 24,
-    right: 24,
-    width: 64,
-    height: 64,
-    borderRadius: 24,
-    backgroundColor: theme.colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: theme.colors.primary,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
-    elevation: 6,
   },
   footerLoader: {
     marginVertical: theme.spacing.gapLg,
@@ -305,32 +290,6 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.gapSm,
     borderRadius: theme.roundness.xl,
   },
-  chipsContainer: {
-    marginBottom: theme.spacing.gapSm,
-  },
-  chipsScroll: {
-    paddingHorizontal: theme.spacing.margin,
-    gap: theme.spacing.gapSm,
-  },
-  chipSelected: {
-    backgroundColor: theme.colors.primary,
-    borderRadius: theme.roundness.md,
-    borderColor: theme.colors.primary,
-  },
-  chipUnselected: {
-    backgroundColor: theme.colors.surface,
-    borderColor: theme.colors.borderSubtle,
-    borderRadius: theme.roundness.md,
-  },
-  chipTextSelected: {
-    ...theme.typography.labelSm,
-    color: theme.colors.onPrimary,
-    fontWeight: '600',
-  },
-  chipTextUnselected: {
-    ...theme.typography.labelSm,
-    color: theme.colors.onSurfaceVariant,
-  },
   clearContainer: {
     alignItems: 'flex-end',
     marginRight: theme.spacing.margin,
@@ -349,10 +308,4 @@ const styles = StyleSheet.create({
   listContent: {
     paddingBottom: theme.spacing.gapLg,
   },
-  headerCount: {
-    ...theme.typography.labelSm,
-    color: theme.colors.textMuted,
-    marginRight: theme.spacing.paddingX,
-  },
 });
-

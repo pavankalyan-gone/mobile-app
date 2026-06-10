@@ -10,13 +10,14 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
-import { useCallStore } from '../store/callStore';
+import { useCallStore, isPendingCallFresh } from '../store/callStore';
 import { ErrorBoundary } from '../components/ui/ErrorBoundary';
 import { OfflineBanner } from '../components/ui/OfflineBanner';
 import { PostCallModal } from '../components/ui/PostCallModal';
 import { startCallDetection } from '../services/callDetectionService';
 import { leadsService } from '../services/leadsService';
 import { notificationService } from '../services/notificationService';
+import { phonesMatch } from '../utils/phone';
 import { theme } from '../constants/theme';
 
 const paperTheme = {
@@ -44,43 +45,37 @@ const queryClient = new QueryClient({
   },
 });
 
-// Normalize phone numbers to digits only for comparison
-function normalizePhone(phone: string): string {
-  return phone.replace(/\D/g, '').replace(/^0+/, '');
-}
-
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const { isAuthenticated, checkAuth, logout } = useAuthStore();
   const segments = useSegments();
   const router = useRouter();
   const addNotification = useNotificationStore((state) => state.addNotification);
-  const { pendingCall, setIncomingCall, setIncomingNumber, showModal } = useCallStore();
 
   const notificationListener = useRef<Notifications.Subscription | null>(null);
   const responseListener = useRef<Notifications.Subscription | null>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const backgroundedAtRef = useRef<number | null>(null);
-  const stopCallDetectionRef = useRef<(() => void) | null>(null);
 
   // ─── Call detection (incoming calls) ────────────────────────────────────────
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    startCallDetection(async (event, rawNumber) => {
-      if (event === 'Incoming' && rawNumber) {
-        // Try to match the caller number against existing leads
-        setIncomingNumber(rawNumber);
+    // startCallDetection resolves asynchronously (permission prompt). Track
+    // cancellation so a fast unmount can never leak a live native detector.
+    let cancelled = false;
+    let stopDetection: (() => void) | null = null;
 
+    startCallDetection(async (event, rawNumber) => {
+      const callStore = useCallStore.getState();
+
+      if (event === 'Incoming' && rawNumber) {
         try {
           const { leads } = await leadsService.getAll({ search: rawNumber, limit: 5 });
-          const callerNumber = normalizePhone(rawNumber);
-          const matched = leads.find(
-            (l) => l.phone && normalizePhone(l.phone) === callerNumber
-          );
+          const matched = leads.find((l) => phonesMatch(l.phone, rawNumber));
 
           if (matched) {
-            setIncomingCall({
+            callStore.setIncomingCall({
               leadId: matched.id,
               leadName: matched.name,
               leadPhone: rawNumber,
@@ -96,26 +91,34 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
               },
               trigger: null,
             });
+          } else {
+            // An unrelated call superseded whatever was pending — don't let a
+            // stale outgoing call get attributed to this conversation.
+            callStore.clearPendingCall();
           }
         } catch (err) {
-          console.warn('Lead lookup for caller failed:', err);
+          if (__DEV__) console.warn('Lead lookup for caller failed:', err);
         }
       }
 
-      // When the call disconnects, show the post-call popup (if we have a context)
+      // When the call disconnects, show the post-call popup (if we have a fresh context)
       if (event === 'Disconnected') {
         const call = useCallStore.getState().pendingCall;
-        if (call) {
-          showModal();
+        if (isPendingCallFresh(call)) {
+          useCallStore.getState().showModal();
+        } else if (call) {
+          useCallStore.getState().clearPendingCall();
         }
       }
     }).then((stop) => {
-      stopCallDetectionRef.current = stop;
+      if (cancelled) stop(); // resolved after cleanup — dispose immediately
+      else stopDetection = stop;
     });
 
     return () => {
-      stopCallDetectionRef.current?.();
-      stopCallDetectionRef.current = null;
+      cancelled = true;
+      stopDetection?.();
+      stopDetection = null;
     };
   }, [isAuthenticated]);
 
@@ -135,13 +138,16 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
         // Outgoing call: pendingCall already set when the user tapped the phone icon
         // iOS incoming: CTCallCenter fires while in foreground only, so this handles
         //               the case where the user returned after an iOS call
-        if (pendingCall && bgTime && Date.now() - bgTime > 5000) {
-          showModal();
+        const callStore = useCallStore.getState();
+        const call = callStore.pendingCall;
+        if (call && bgTime && Date.now() - bgTime > 5000) {
+          if (isPendingCallFresh(call)) callStore.showModal();
+          else callStore.clearPendingCall(); // expired — never prompt for an old call
         }
       }
     });
     return () => subscription.remove();
-  }, [pendingCall, showModal]);
+  }, []);
 
   // ─── Auth check ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -153,11 +159,11 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
           notificationService.registerDeviceToken();
         }
       } catch (error) {
-        console.error('Network or session check failed on launch:', error);
+        if (__DEV__) console.warn('Session check failed on launch:', error);
         try {
           await logout();
-        } catch (logoutError) {
-          console.error('Logout failed after failed auth check:', logoutError);
+        } catch {
+          // best-effort cleanup
         }
         useAuthStore.setState({ isAuthenticated: false });
       } finally {
@@ -169,7 +175,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (isCheckingAuth) return;
-    
+
     const inAuthGroup = segments[0] === '(auth)';
     if (!isAuthenticated && !inAuthGroup) {
       router.replace('/(auth)/login');
@@ -226,26 +232,26 @@ export default function RootLayout() {
           await Updates.fetchUpdateAsync();
           await Updates.reloadAsync();
         }
-      } catch (e) {
-        console.log('OTA update check skipped in development:', e);
+      } catch {
+        // OTA updates unavailable (e.g. development) — ignore
       }
     }
     checkForUpdate();
   }, []);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <PaperProvider theme={paperTheme}>
-        <SafeAreaProvider>
+    <SafeAreaProvider>
+      <QueryClientProvider client={queryClient}>
+        <PaperProvider theme={paperTheme}>
           <ErrorBoundary>
             <AuthGuard>
               <OfflineBanner />
               <Stack screenOptions={{ headerShown: false }} />
             </AuthGuard>
           </ErrorBoundary>
-        </SafeAreaProvider>
-      </PaperProvider>
-    </QueryClientProvider>
+        </PaperProvider>
+      </QueryClientProvider>
+    </SafeAreaProvider>
   );
 }
 

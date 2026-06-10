@@ -1,10 +1,13 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { estimatesService, CreateEstimatePayload, EstimateStatus, PostCommentPayload } from '../services/estimatesService';
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient, QueryClient } from '@tanstack/react-query';
+import { estimatesService, EstimateDetail, EstimateStatus, PostCommentPayload } from '../services/estimatesService';
 
-export const useEstimates = (params?: { status?: string; client_id?: number; page?: number }) =>
-  useQuery({
+export const useEstimates = (params?: { status?: string; client_id?: number }) =>
+  useInfiniteQuery({
     queryKey: ['estimates', params],
-    queryFn: () => estimatesService.getAll(params),
+    queryFn: ({ pageParam }) => estimatesService.getAll({ ...params, page: pageParam }),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) =>
+      lastPage.current_page < lastPage.last_page ? lastPage.current_page + 1 : undefined,
     staleTime: 1000 * 60 * 2,
   });
 
@@ -15,105 +18,88 @@ export const useEstimate = (id: number) =>
     enabled: !!id,
   });
 
-export const useCreateEstimate = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (payload: CreateEstimatePayload) => estimatesService.create(payload),
-    onSuccess: () => {
+/**
+ * Optimistically writes the new status into the detail cache so the UI updates
+ * instantly, rolls back on error, and re-syncs with the server when settled.
+ * Replaces the fragile local-useState mirrors the detail screens used to keep.
+ */
+function optimisticStatus<TVars>(
+  queryClient: QueryClient,
+  mutationFn: (vars: TVars) => Promise<unknown>,
+  getId: (vars: TVars) => number,
+  getStatus: (vars: TVars) => EstimateStatus,
+) {
+  return {
+    mutationFn,
+    onMutate: async (vars: TVars) => {
+      const id = getId(vars);
+      await queryClient.cancelQueries({ queryKey: ['estimate', id] });
+      const previous = queryClient.getQueryData<EstimateDetail>(['estimate', id]);
+      if (previous) {
+        queryClient.setQueryData<EstimateDetail>(['estimate', id], {
+          ...previous,
+          status: getStatus(vars),
+        });
+      }
+      return { previous };
+    },
+    onError: (_err: unknown, vars: TVars, context?: { previous?: EstimateDetail }) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['estimate', getId(vars)], context.previous);
+      }
+    },
+    onSettled: (_data: unknown, _err: unknown, vars: TVars) => {
+      queryClient.invalidateQueries({ queryKey: ['estimate', getId(vars)] });
       queryClient.invalidateQueries({ queryKey: ['estimates'] });
     },
-  });
-};
-
-export const useUpdateEstimate = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, payload }: { id: number; payload: Partial<CreateEstimatePayload> }) =>
-      estimatesService.update(id, payload),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['estimates'] });
-      queryClient.invalidateQueries({ queryKey: ['estimate', variables.id] });
-    },
-  });
-};
-
-export const useDeleteEstimate = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (id: number) => estimatesService.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['estimates'] });
-    },
-  });
-};
-
-export const useCopyEstimate = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (id: number) => estimatesService.copy(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['estimates'] });
-    },
-  });
-};
+  };
+}
 
 export const useSendEstimate = () => {
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (id: number) => estimatesService.send(id),
-    onSuccess: (_, id) => {
-      queryClient.invalidateQueries({ queryKey: ['estimate', id] });
-      queryClient.invalidateQueries({ queryKey: ['estimates'] });
-    },
-  });
+  return useMutation(
+    optimisticStatus(queryClient, (id: number) => estimatesService.send(id), (id) => id, () => 'sent')
+  );
 };
 
 export const useMarkEstimateAs = () => {
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, status }: { id: number; status: EstimateStatus }) =>
-      estimatesService.markAs(id, status),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['estimate', variables.id] });
-      queryClient.invalidateQueries({ queryKey: ['estimates'] });
-    },
-  });
+  return useMutation(
+    optimisticStatus(
+      queryClient,
+      ({ id, status }: { id: number; status: EstimateStatus }) => estimatesService.markAs(id, status),
+      (v) => v.id,
+      (v) => v.status
+    )
+  );
 };
 
 export const useUpdateEstimateStatus = useMarkEstimateAs;
 
 export const useSubmitEstimate = () => {
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (id: number) => estimatesService.submit(id),
-    onSuccess: (_, id) => {
-      queryClient.invalidateQueries({ queryKey: ['estimate', id] });
-      queryClient.invalidateQueries({ queryKey: ['estimates'] });
-    },
-  });
+  return useMutation(
+    optimisticStatus(queryClient, (id: number) => estimatesService.submit(id), (id) => id, () => 'waiting_approval')
+  );
 };
 
 export const useApproveEstimate = () => {
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (id: number) => estimatesService.approve(id),
-    onSuccess: (_, id) => {
-      queryClient.invalidateQueries({ queryKey: ['estimate', id] });
-      queryClient.invalidateQueries({ queryKey: ['estimates'] });
-    },
-  });
+  return useMutation(
+    optimisticStatus(queryClient, (id: number) => estimatesService.approve(id), (id) => id, () => 'approved')
+  );
 };
 
 export const useRejectEstimate = () => {
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, reason }: { id: number; reason: string }) =>
-      estimatesService.reject(id, reason),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['estimate', variables.id] });
-      queryClient.invalidateQueries({ queryKey: ['estimates'] });
-    },
-  });
+  return useMutation(
+    optimisticStatus(
+      queryClient,
+      ({ id, reason }: { id: number; reason: string }) => estimatesService.reject(id, reason),
+      (v) => v.id,
+      () => 'declined'
+    )
+  );
 };
 
 export const useEstimateComments = (estimateId: number) =>

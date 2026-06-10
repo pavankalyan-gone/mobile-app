@@ -4,6 +4,7 @@ import { Text, Button, Chip } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useCallStore } from '../../store/callStore';
 import { useAddLeadNote, useAddLeadReminder } from '../../hooks/useLeads';
+import { theme } from '../../constants/theme';
 
 interface ReminderOption {
   label: string;
@@ -61,6 +62,7 @@ export function PostCallModal() {
   const [selectedReminder, setSelectedReminder] = useState<number | null>(null);
   const [reminderDesc, setReminderDesc] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   if (!modalVisible || !pendingCall) return null;
 
@@ -68,6 +70,7 @@ export function PostCallModal() {
     setNote('');
     setSelectedReminder(null);
     setReminderDesc('');
+    setSaveError(null);
     dismissModal();
   };
 
@@ -78,40 +81,32 @@ export function PostCallModal() {
     }
 
     setIsSaving(true);
+    setSaveError(null);
     const leadId = pendingCall.leadId;
 
     try {
       if (note.trim()) {
-        await new Promise<void>((resolve, reject) =>
-          addNote.mutate(
-            { id: leadId, description: note.trim() },
-            { onSuccess: () => resolve(), onError: reject }
-          )
-        );
+        await addNote.mutateAsync({ id: leadId, description: note.trim() });
       }
 
       if (selectedReminder !== null) {
         const date = REMINDER_OPTIONS[selectedReminder].getDate();
         const description = reminderDesc.trim() || `Follow up after call with ${pendingCall.leadName}`;
-        await new Promise<void>((resolve, reject) =>
-          addReminder.mutate(
-            {
-              leadId,
-              payload: {
-                description,
-                date: formatDateForApi(date),
-                notify_by_email: 0,
-              },
-            },
-            { onSuccess: () => resolve(), onError: reject }
-          )
-        );
+        await addReminder.mutateAsync({
+          leadId,
+          payload: {
+            description,
+            date: formatDateForApi(date),
+            notify_by_email: 0,
+          },
+        });
       }
-    } catch (err) {
-      console.error('Post-call save failed:', err);
+      handleClose();
+    } catch {
+      // Keep the modal (and the user's text) open so nothing is silently lost
+      setSaveError('Could not save. Check your connection and try again.');
     } finally {
       setIsSaving(false);
-      handleClose();
     }
   };
 
@@ -135,11 +130,11 @@ export function PostCallModal() {
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerLeft}>
-              <View style={[styles.callIconBg, { backgroundColor: isIncoming ? '#DBEAFE' : '#DCFCE7' }]}>
+              <View style={[styles.callIconBg, { backgroundColor: isIncoming ? '#ffd8ed' : '#cfebba' }]}>
                 <MaterialCommunityIcons
                   name={isIncoming ? 'phone-incoming' : 'phone-outgoing'}
                   size={22}
-                  color={isIncoming ? '#1D4ED8' : '#16A34A'}
+                  color={isIncoming ? '#290a21' : theme.colors.primary}
                 />
               </View>
               <View>
@@ -152,8 +147,13 @@ export function PostCallModal() {
                 </Text>
               </View>
             </View>
-            <TouchableOpacity onPress={handleClose} hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}>
-              <MaterialCommunityIcons name="close" size={22} color="#888" />
+            <TouchableOpacity
+              onPress={handleClose}
+              hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+            >
+              <MaterialCommunityIcons name="close" size={22} color={theme.colors.textMuted} />
             </TouchableOpacity>
           </View>
 
@@ -161,7 +161,7 @@ export function PostCallModal() {
             {/* Note section */}
             <View style={styles.section}>
               <Text style={styles.sectionLabel}>
-                <MaterialCommunityIcons name="note-text-outline" size={14} color="#6750A4" />
+                <MaterialCommunityIcons name="note-text-outline" size={14} color={theme.colors.primary} />
                 {'  '}Call Notes
               </Text>
               <TextInput
@@ -169,9 +169,9 @@ export function PostCallModal() {
                 value={note}
                 onChangeText={setNote}
                 placeholder="What was discussed? Any follow-up needed?"
-                placeholderTextColor="#bbb"
+                placeholderTextColor={theme.colors.textMuted}
                 multiline
-                autoFocus
+                maxLength={2000}
                 textAlignVertical="top"
               />
             </View>
@@ -179,7 +179,7 @@ export function PostCallModal() {
             {/* Reminder section */}
             <View style={styles.section}>
               <Text style={styles.sectionLabel}>
-                <MaterialCommunityIcons name="bell-outline" size={14} color="#6750A4" />
+                <MaterialCommunityIcons name="bell-outline" size={14} color={theme.colors.primary} />
                 {'  '}Set a Reminder
               </Text>
               <View style={styles.reminderChips}>
@@ -203,15 +203,18 @@ export function PostCallModal() {
                   value={reminderDesc}
                   onChangeText={setReminderDesc}
                   placeholder={`Follow up after call with ${pendingCall.leadName}`}
-                  placeholderTextColor="#bbb"
+                  placeholderTextColor={theme.colors.textMuted}
+                  maxLength={500}
                 />
               )}
             </View>
           </ScrollView>
 
+          {saveError && <Text style={styles.errorText}>{saveError}</Text>}
+
           {/* Actions */}
           <View style={styles.actions}>
-            <Button mode="text" onPress={handleClose} textColor="#888">
+            <Button mode="text" onPress={handleClose} textColor={theme.colors.textMuted}>
               Skip
             </Button>
             <Button
@@ -220,8 +223,10 @@ export function PostCallModal() {
               loading={isSaving}
               disabled={isSaving}
               style={styles.saveBtn}
+              buttonColor={theme.colors.primary}
+              textColor={theme.colors.onPrimary}
             >
-              Save
+              {saveError ? 'Retry' : 'Save'}
             </Button>
           </View>
         </View>
@@ -237,9 +242,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
   sheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    backgroundColor: theme.colors.surface,
+    borderTopLeftRadius: theme.roundness.xl,
+    borderTopRightRadius: theme.roundness.xl,
     paddingTop: 8,
     paddingHorizontal: 20,
     paddingBottom: 32,
@@ -251,7 +256,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: theme.colors.surfaceContainer,
     marginBottom: 4,
   },
   headerLeft: {
@@ -264,42 +269,41 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: '#DCFCE7',
     alignItems: 'center',
     justifyContent: 'center',
   },
   title: {
-    fontSize: 16,
+    ...theme.typography.labelLg,
     fontWeight: '700',
-    color: '#1a1a1a',
+    color: theme.colors.onSurface,
   },
   subtitle: {
-    fontSize: 13,
-    color: '#888',
+    ...theme.typography.labelSm,
+    color: theme.colors.textMuted,
     marginTop: 2,
   },
   section: {
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#f5f5f5',
+    borderBottomColor: theme.colors.surfaceContainerLow,
   },
   sectionLabel: {
-    fontSize: 13,
+    ...theme.typography.labelSm,
     fontWeight: '700',
-    color: '#6750A4',
+    color: theme.colors.primary,
     marginBottom: 10,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   noteInput: {
     borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 10,
+    borderColor: theme.colors.borderSubtle,
+    borderRadius: theme.roundness.md,
     padding: 12,
-    fontSize: 15,
-    color: '#1a1a1a',
+    ...theme.typography.bodyLg,
+    color: theme.colors.onSurface,
     minHeight: 96,
-    backgroundColor: '#fafafa',
+    backgroundColor: theme.colors.surfaceContainerLow,
     textAlignVertical: 'top',
   },
   reminderChips: {
@@ -309,28 +313,35 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   chipSelected: {
-    backgroundColor: '#6750A4',
+    backgroundColor: theme.colors.primary,
   },
   chipUnselected: {
-    borderColor: '#e0e0e0',
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.borderSubtle,
   },
   chipTextSelected: {
-    color: '#fff',
-    fontSize: 12,
+    ...theme.typography.labelSm,
+    color: theme.colors.onPrimary,
   },
   chipTextUnselected: {
-    color: '#555',
-    fontSize: 12,
+    ...theme.typography.labelSm,
+    color: theme.colors.onSurfaceVariant,
   },
   reminderInput: {
     borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 8,
+    borderColor: theme.colors.borderSubtle,
+    borderRadius: theme.roundness.default,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    fontSize: 14,
-    color: '#1a1a1a',
-    backgroundColor: '#fafafa',
+    ...theme.typography.bodyMd,
+    color: theme.colors.onSurface,
+    backgroundColor: theme.colors.surfaceContainerLow,
+  },
+  errorText: {
+    ...theme.typography.labelSm,
+    color: theme.colors.error,
+    paddingTop: 12,
+    textAlign: 'right',
   },
   actions: {
     flexDirection: 'row',
@@ -340,7 +351,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   saveBtn: {
-    borderRadius: 8,
+    borderRadius: theme.roundness.xl,
     paddingHorizontal: 8,
   },
 });

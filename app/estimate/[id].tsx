@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
-import { View, ScrollView, StyleSheet, Linking, TouchableOpacity, Alert, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
-import { Text, Chip, Button, Divider, DataTable, ActivityIndicator } from 'react-native-paper';
+import { useState } from 'react';
+import { View, ScrollView, StyleSheet, TouchableOpacity, Alert, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { Text, Chip, Button, DataTable, ActivityIndicator } from 'react-native-paper';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import {
@@ -14,6 +14,9 @@ import {
   usePostComment,
 } from '../../hooks/useEstimates';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { getStatusStyles } from '../../utils/statusColors';
+import { formatDate, formatDateTime, formatINR } from '../../utils/format';
+import { openExternal } from '../../utils/linking';
 import { theme } from '../../constants/theme';
 
 export default function EstimateDetailScreen() {
@@ -28,16 +31,9 @@ export default function EstimateDetailScreen() {
   const { data: comments } = useEstimateComments(Number(id));
   const { mutate: postComment, isPending: isPosting } = usePostComment();
 
-  const [displayStatus, setDisplayStatus] = useState<string>('');
   const [commentText, setCommentText] = useState('');
   const [rejectDialogVisible, setRejectDialogVisible] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
-
-  useEffect(() => {
-    if (estimate) {
-      setDisplayStatus(estimate.status);
-    }
-  }, [estimate]);
 
   if (isLoading) {
     return (
@@ -57,68 +53,40 @@ export default function EstimateDetailScreen() {
     );
   }
 
-  const getStatusStyles = (status: string) => {
-    const normalized = status.toLowerCase().replace(/\s+/g, '_');
-    if (normalized.includes('accept') || normalized.includes('approv')) {
-      return { backgroundColor: '#cfebba', color: '#1b300f' }; // Light forest tint
-    }
-    if (normalized.includes('declin') || normalized.includes('expir')) {
-      return { backgroundColor: '#ffdad6', color: '#ba1a1a' }; // Red error tint
-    }
-    if (normalized.includes('sent') || normalized.includes('wait') || normalized.includes('pend')) {
-      return { backgroundColor: '#ffd8ed', color: '#290a21' }; // Pink tertiary tint
-    }
-    return { backgroundColor: '#eeeeec', color: '#44483f' }; // Gray tint
-  };
+  // Status comes from the query cache — the mutation hooks apply optimistic
+  // updates and roll back on error, so no local mirror state is needed.
+  const status = estimate.status ?? '';
+  const statusStyles = getStatusStyles(status);
+  const norm = status.toLowerCase().replace(/\s+/g, '_');
+  const anyActionPending = isUpdating || isSending || isSubmitting || isApproving || isRejecting;
 
-  const statusStyles = getStatusStyles(displayStatus);
+  const onMutationError = () =>
+    Alert.alert('Action failed', 'Could not update the estimate. Please try again.');
 
-  const handleAccept = () => {
-    const prev = displayStatus;
-    setDisplayStatus('accepted');
-    updateStatus({ id: estimate.id, status: 'accepted' }, { onError: () => setDisplayStatus(prev) });
-  };
+  const handleAccept = () =>
+    updateStatus({ id: estimate.id, status: 'accepted' }, { onError: onMutationError });
 
   const handleDecline = () => {
     Alert.alert('Mark as Declined?', 'Are you sure you want to mark this estimate as declined?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Confirm',
-        onPress: () => {
-          const prev = displayStatus;
-          setDisplayStatus('declined');
-          updateStatus({ id: estimate.id, status: 'declined' }, { onError: () => setDisplayStatus(prev) });
-        },
+        onPress: () =>
+          updateStatus({ id: estimate.id, status: 'declined' }, { onError: onMutationError }),
       },
     ]);
   };
 
-  const handleSend = () => {
-    const prev = displayStatus;
-    setDisplayStatus('sent');
-    sendEstimate(estimate.id, { onError: () => setDisplayStatus(prev) });
-  };
-
-  const handleSubmit = () => {
-    const prev = displayStatus;
-    setDisplayStatus('waiting_approval');
-    submitEstimate(estimate.id, { onError: () => setDisplayStatus(prev) });
-  };
-
-  const handleApprove = () => {
-    const prev = displayStatus;
-    setDisplayStatus('approved');
-    approveEstimate(estimate.id, { onError: () => setDisplayStatus(prev) });
-  };
+  const handleSend = () => sendEstimate(estimate.id, { onError: onMutationError });
+  const handleSubmit = () => submitEstimate(estimate.id, { onError: onMutationError });
+  const handleApprove = () => approveEstimate(estimate.id, { onError: onMutationError });
 
   const handleRejectConfirm = () => {
     if (!rejectReason.trim()) return;
-    const prev = displayStatus;
-    setDisplayStatus('declined');
     setRejectDialogVisible(false);
     rejectEstimate(
       { id: estimate.id, reason: rejectReason.trim() },
-      { onError: () => setDisplayStatus(prev) }
+      { onError: onMutationError }
     );
     setRejectReason('');
   };
@@ -127,30 +95,16 @@ export default function EstimateDetailScreen() {
     const text = commentText.trim();
     if (!text) return;
     setCommentText('');
-    postComment({ estimateId: estimate.id, payload: { content: text } });
+    postComment(
+      { estimateId: estimate.id, payload: { content: text } },
+      {
+        onError: () => {
+          setCommentText(text); // restore the user's text instead of losing it
+          Alert.alert('Comment not posted', 'Check your connection and try again.');
+        },
+      }
+    );
   };
-
-  const formatDate = (dateStr: string) => {
-    if (!dateStr) return '';
-    const date = new Date(dateStr);
-    const dayNum = String(date.getDate()).padStart(2, '0');
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return `${dayNum} ${months[date.getMonth()]} ${date.getFullYear()}`;
-  };
-
-  const formatDateTime = (dateStr: string) => {
-    if (!dateStr) return '';
-    const date = new Date(dateStr);
-    let hours = date.getHours();
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    hours = hours % 12 || 12;
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return `${String(date.getDate()).padStart(2, '0')} ${months[date.getMonth()]} ${date.getFullYear()}, ${hours}:${minutes} ${ampm}`;
-  };
-
-  const norm = displayStatus.toLowerCase().replace(/\s+/g, '_');
-  const anyActionPending = isUpdating || isSending || isSubmitting || isApproving || isRejecting;
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -172,7 +126,7 @@ export default function EstimateDetailScreen() {
             textStyle={{ color: statusStyles.color, fontWeight: '700' }}
             showSelectedOverlay={false}
           >
-            {displayStatus.toUpperCase().replace(/_/g, ' ')}
+            {status.toUpperCase().replace(/_/g, ' ')}
           </Chip>
         </View>
 
@@ -183,6 +137,8 @@ export default function EstimateDetailScreen() {
             style={styles.infoRow}
             activeOpacity={0.7}
             onPress={() => estimate.lead_id && router.push(`/lead/${estimate.lead_id}`)}
+            accessibilityRole="button"
+            accessibilityLabel={`Open lead ${estimate.lead_name ?? ''}`}
           >
             <MaterialCommunityIcons name="account-outline" size={22} color={theme.colors.primary} />
             <Text style={styles.infoTextLink}>{estimate.lead_name}</Text>
@@ -214,10 +170,10 @@ export default function EstimateDetailScreen() {
                   <Text style={styles.cellText}>{item.qty}</Text>
                 </DataTable.Cell>
                 <DataTable.Cell numeric style={styles.colRate}>
-                  <Text style={styles.cellText}>₹{item.rate.toLocaleString('en-IN')}</Text>
+                  <Text style={styles.cellText}>{formatINR(item.rate)}</Text>
                 </DataTable.Cell>
                 <DataTable.Cell numeric style={styles.colAmt}>
-                  <Text style={styles.cellText}>₹{item.amount.toLocaleString('en-IN')}</Text>
+                  <Text style={styles.cellText}>{formatINR(item.amount)}</Text>
                 </DataTable.Cell>
               </DataTable.Row>
             ))}
@@ -227,7 +183,7 @@ export default function EstimateDetailScreen() {
                 <Text style={styles.subtotalLabel}>Subtotal</Text>
               </DataTable.Cell>
               <DataTable.Cell numeric style={{ flex: 1.5 }}>
-                <Text style={styles.subtotalValue}>₹{estimate.subtotal?.toLocaleString('en-IN')}</Text>
+                <Text style={styles.subtotalValue}>{formatINR(estimate.subtotal)}</Text>
               </DataTable.Cell>
             </DataTable.Row>
 
@@ -236,7 +192,7 @@ export default function EstimateDetailScreen() {
                 <Text style={styles.totalLabel}>Total</Text>
               </DataTable.Cell>
               <DataTable.Cell numeric style={{ flex: 1.5 }}>
-                <Text style={styles.totalValue}>₹{estimate.total.toLocaleString('en-IN')}</Text>
+                <Text style={styles.totalValue}>{formatINR(estimate.total)}</Text>
               </DataTable.Cell>
             </DataTable.Row>
           </DataTable>
@@ -337,7 +293,7 @@ export default function EstimateDetailScreen() {
               <Button
                 mode="outlined"
                 icon="file-pdf-box"
-                onPress={() => Linking.openURL(estimate.pdf_url!)}
+                onPress={() => openExternal(estimate.pdf_url!)}
                 style={styles.actionButton}
                 contentStyle={styles.buttonContent}
                 textColor={theme.colors.primary}
@@ -357,6 +313,7 @@ export default function EstimateDetailScreen() {
                 onChangeText={setRejectReason}
                 placeholder="Enter reason…"
                 multiline
+                maxLength={1000}
                 placeholderTextColor={theme.colors.textMuted}
               />
               <View style={styles.rejectActions}>
@@ -406,11 +363,14 @@ export default function EstimateDetailScreen() {
               placeholder="Add a comment…"
               placeholderTextColor={theme.colors.textMuted}
               multiline
+              maxLength={2000}
             />
             <TouchableOpacity
               onPress={handlePostComment}
               disabled={!commentText.trim() || isPosting}
               style={[styles.sendBtn, (!commentText.trim() || isPosting) && { opacity: 0.4 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Post comment"
             >
               {isPosting ? (
                 <ActivityIndicator size={20} color={theme.colors.primary} />
@@ -469,6 +429,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.01,
     shadowRadius: 4,
+    elevation: 1,
   },
   commentsCard: {
     marginBottom: theme.spacing.gapLg,
@@ -527,11 +488,11 @@ const styles = StyleSheet.create({
   colQty: { flex: 0.8 },
   colRate: { flex: 1.2 },
   colAmt: { flex: 1.5 },
-  cellText: { 
+  cellText: {
     ...theme.typography.bodyMd,
     fontSize: 12,
   },
-  summaryRow: { 
+  summaryRow: {
     backgroundColor: theme.colors.surfaceContainerLow,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.borderSubtle,
@@ -539,22 +500,22 @@ const styles = StyleSheet.create({
   totalRow: {
     backgroundColor: theme.colors.surfaceContainer,
   },
-  subtotalLabel: { 
+  subtotalLabel: {
     ...theme.typography.bodyMd,
     color: theme.colors.textMuted,
   },
-  subtotalValue: { 
+  subtotalValue: {
     ...theme.typography.bodyMd,
     color: theme.colors.onSurfaceVariant,
   },
-  totalLabel: { 
+  totalLabel: {
     ...theme.typography.labelLg,
-    fontWeight: '700', 
+    fontWeight: '700',
     color: theme.colors.primary,
   },
-  totalValue: { 
+  totalValue: {
     ...theme.typography.headlineMd,
-    fontWeight: '700', 
+    fontWeight: '700',
     color: theme.colors.primary,
   },
   buttonsRow: {
@@ -668,4 +629,3 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
 });
-

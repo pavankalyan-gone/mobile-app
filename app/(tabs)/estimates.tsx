@@ -1,12 +1,13 @@
-import { useState } from 'react';
-import { FlatList, View, StyleSheet, RefreshControl, ScrollView, TouchableOpacity } from 'react-native';
-import { ActivityIndicator, Chip, Text, IconButton } from 'react-native-paper';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useState, useCallback } from 'react';
+import { FlatList, View, StyleSheet, RefreshControl, ScrollView, ListRenderItemInfo } from 'react-native';
+import { ActivityIndicator, Chip, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, Stack } from 'expo-router';
 import { useEstimates } from '../../hooks/useEstimates';
+import { Estimate } from '../../services/estimatesService';
 import { EstimateCard } from '../../components/estimates/EstimateCard';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { ScreenHeader } from '../../components/ui/ScreenHeader';
 import { theme } from '../../constants/theme';
 
 const FILTER_CHIPS = [
@@ -23,27 +24,36 @@ const FILTER_CHIPS = [
 export default function EstimatesScreen() {
   const router = useRouter();
   const [statusFilter, setStatusFilter] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
 
-  const { data, isLoading, isFetching, refetch } = useEstimates({
+  const { data, isLoading, isError, refetch, fetchNextPage, hasNextPage, isFetchingNextPage } = useEstimates({
     status: statusFilter || undefined,
   });
 
-  const totalCount = data?.total;
+  const totalCount = data?.pages[0]?.total;
+  const allEstimates = data?.pages.flatMap((page) => page.data) ?? [];
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await refetch();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refetch]);
+
+  const renderEstimate = useCallback(
+    ({ item }: ListRenderItemInfo<Estimate>) => (
+      <EstimateCard estimate={item} onPress={() => router.push(`/estimate/${item.id}`)} />
+    ),
+    [router]
+  );
 
   return (
     <SafeAreaView style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
-      
-      <View style={styles.header}>
-        <View style={styles.headerTextContainer}>
-          <Text style={styles.headerTitle}>Estimates</Text>
-          <Text style={styles.headerSubtitle}>{totalCount ?? 0} Total Entries</Text>
-        </View>
-        <View style={styles.headerActions}>
-          <IconButton icon="bell-outline" size={24} iconColor={theme.colors.primary} onPress={() => {}} style={styles.headerIconBtn} />
-          <IconButton icon="calendar-month" size={24} iconColor={theme.colors.primary} onPress={() => router.push('/(tabs)/calendar')} style={styles.headerIconBtn} />
-        </View>
-      </View>
+
+      <ScreenHeader title="Estimates" subtitle={`${totalCount ?? 0} Total Entries`} />
 
       <View style={styles.chipsContainer}>
         <ScrollView
@@ -76,26 +86,42 @@ export default function EstimatesScreen() {
         </View>
       ) : (
         <FlatList
-          data={data?.data ?? []}
+          data={allEstimates}
           keyExtractor={(item) => String(item.id)}
-          renderItem={({ item }) => (
-            <EstimateCard
-              estimate={item}
-              onPress={() => router.push(`/estimate/${item.id}`)}
-            />
-          )}
+          renderItem={renderEstimate}
           refreshControl={
-            <RefreshControl refreshing={isFetching} onRefresh={refetch} tintColor={theme.colors.primary} />
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.colors.primary} />
+          }
+          onEndReached={() => {
+            if (hasNextPage && !isFetchingNextPage) {
+              fetchNextPage();
+            }
+          }}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={
+            isFetchingNextPage ? (
+              <ActivityIndicator size="small" color={theme.colors.primary} style={styles.footerLoader} />
+            ) : null
           }
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={
-            <EmptyState
-              icon="file-remove-outline"
-              title="No estimates found"
-              subtitle="Try a different status filter"
-              buttonText={statusFilter !== '' ? "Clear filter" : undefined}
-              onPressButton={statusFilter !== '' ? () => setStatusFilter('') : undefined}
-            />
+            isError ? (
+              <EmptyState
+                icon="wifi-off"
+                title="Couldn't load estimates"
+                subtitle="Check your connection and try again"
+                buttonText="Retry"
+                onPressButton={() => refetch()}
+              />
+            ) : (
+              <EmptyState
+                icon="file-remove-outline"
+                title="No estimates found"
+                subtitle="Try a different status filter"
+                buttonText={statusFilter !== '' ? 'Clear filter' : undefined}
+                onPressButton={statusFilter !== '' ? () => setStatusFilter('') : undefined}
+              />
+            )
           }
         />
       )}
@@ -107,39 +133,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.background,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: theme.spacing.paddingX,
-    paddingTop: 16,
-    paddingBottom: 24,
-    backgroundColor: theme.colors.background,
-  },
-  headerTextContainer: {
-    flexDirection: 'column',
-  },
-  headerTitle: {
-    ...theme.typography.headlineXlMobile,
-    fontSize: 25,
-    color: theme.colors.primary,
-    letterSpacing: -0.5,
-  },
-  headerSubtitle: {
-    ...theme.typography.labelSm,
-    fontSize: 9,
-    color: 'rgba(68, 72, 63, 0.6)',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginTop: 2,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    gap: 0,
-  },
-  headerIconBtn: {
-    margin: 0,
   },
   chipsContainer: {
     marginBottom: theme.spacing.gapSm,
@@ -173,13 +166,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  footerLoader: {
+    marginVertical: theme.spacing.gapLg,
+  },
   listContent: {
     paddingBottom: theme.spacing.gapLg,
   },
-  headerCount: {
-    ...theme.typography.labelSm,
-    color: theme.colors.textMuted,
-    marginRight: theme.spacing.paddingX,
-  },
 });
-

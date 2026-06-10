@@ -36,7 +36,7 @@ export const notificationService = {
         name: 'Default',
         importance: Notifications.AndroidImportance.MAX,
         vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#6750A4',
+        lightColor: '#1b300f',
       });
     }
 
@@ -49,7 +49,7 @@ export const notificationService = {
       const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
       return tokenData.data;
     } catch (error) {
-      console.log('Error fetching push token:', error);
+      if (__DEV__) console.warn('Error fetching push token:', error);
       return null;
     }
   },
@@ -69,7 +69,7 @@ export const notificationService = {
         platform: Platform.OS,
       });
     } catch (error) {
-      console.error('Failed to register device token with backend:', error);
+      if (__DEV__) console.warn('Failed to register device token with backend:', error);
     }
   },
 
@@ -81,7 +81,7 @@ export const notificationService = {
       await estimatorApi.post('/devices/deregister', { token });
       await SecureStore.deleteItemAsync(PUSH_TOKEN_KEY);
     } catch (error) {
-      console.error('Failed to deregister device token:', error);
+      if (__DEV__) console.warn('Failed to deregister device token:', error);
     }
   },
 };

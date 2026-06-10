@@ -1,6 +1,14 @@
 import estimatorApi from './estimatorApi';
 
-export type EstimateStatus = 'draft' | 'sent' | 'accepted' | 'declined' | 'expired';
+export type EstimateStatus =
+  | 'draft'
+  | 'sent'
+  | 'accepted'
+  | 'declined'
+  | 'expired'
+  | 'approved'
+  | 'waiting_approval'
+  | 'pending_approval';
 
 export interface EstimateItem {
   product_id: number;
@@ -19,9 +27,6 @@ export interface Estimate {
   estimate_number: string;
   client_id: number;
   status: EstimateStatus;
-  total_amount: number;
-  expiry_date: string;
-  created_by: number;
   created_at?: string;
   lead_name?: string;
   valid_until: string;
@@ -62,12 +67,6 @@ export interface Comment {
   user?: { name: string };
 }
 
-export interface CreateEstimatePayload {
-  client_id: number;
-  expiry_date: string;
-  sections: EstimateSection[];
-}
-
 export interface PostCommentPayload {
   content: string;
   parent_id?: number | null;
@@ -82,26 +81,6 @@ export const estimatesService = {
   getById: async (id: number): Promise<EstimateDetail> => {
     const { data } = await estimatorApi.get(`/estimates/${id}`);
     return data as EstimateDetail;
-  },
-
-  create: async (payload: CreateEstimatePayload) => {
-    const { data } = await estimatorApi.post('/estimates', payload);
-    return data as { success: boolean; estimate: Estimate };
-  },
-
-  update: async (id: number, payload: Partial<CreateEstimatePayload>) => {
-    const { data } = await estimatorApi.put(`/estimates/${id}`, payload);
-    return data as { success: boolean; message: string };
-  },
-
-  delete: async (id: number) => {
-    const { data } = await estimatorApi.delete(`/estimates/${id}`);
-    return data as { success: boolean; message: string };
-  },
-
-  copy: async (id: number) => {
-    const { data } = await estimatorApi.post(`/estimates/${id}/copy`);
-    return data as { success: boolean; new_estimate_id: number; message: string };
   },
 
   send: async (id: number) => {

@@ -9,13 +9,6 @@ export interface LoginPayload {
   password: string;
 }
 
-export interface RegisterPayload {
-  name: string;
-  email: string;
-  password: string;
-  password_confirmation: string;
-}
-
 export interface AuthUser {
   id: number;
   name: string;
@@ -34,13 +27,23 @@ export interface AuthResponse {
 export const authService = {
   /**
    * Logs into both backends with the same credentials.
-   * Estimator token and Perfex token are stored separately.
+   * Perfex CRM is the primary backend: nothing is persisted until it accepts
+   * the credentials, so a rejected login can never leave an orphaned token
+   * behind that would resurrect a half-broken session on the next launch.
+   * The Estimator login is best-effort.
    */
   login: async (payload: LoginPayload): Promise<AuthResponse> => {
+    // 1. Authenticate with Perfex CRM (mandatory)
+    const { data: perfexWrapper } = await perfexApi.post<any>('/auth/login', payload);
+    const perfexToken: string = perfexWrapper.data?.access_token || perfexWrapper.access_token || '';
+    if (!perfexToken) {
+      throw new Error('No authentication token received from Perfex CRM.');
+    }
+    await SecureStore.setItemAsync(PERFEX_TOKEN_KEY, perfexToken);
+
+    // 2. Authenticate with the Estimator app (optional)
     let estToken = '';
     let user: AuthUser = { id: 0, name: 'User', email: payload.email, role: 'staff' };
-    
-    // Attempt to authenticate with Estimator app (may fail if local server is down)
     try {
       const { data: estData } = await estimatorApi.post<{
         success: boolean;
@@ -48,68 +51,46 @@ export const authService = {
         token: string;
       }>('/login', payload);
       estToken = estData.token;
-      user = estData.user;
-      await SecureStore.setItemAsync(ESTIMATOR_TOKEN_KEY, estToken);
-    } catch (error) {
-      console.warn('Estimator API login failed or not available, proceeding with Perfex only');
+      if (estData.user) user = estData.user;
+      if (estToken) await SecureStore.setItemAsync(ESTIMATOR_TOKEN_KEY, estToken);
+    } catch {
+      if (__DEV__) console.warn('Estimator API login failed or not available, proceeding with Perfex only');
     }
 
-    // Authenticate directly with Perfex CRM
-    let perfexToken = '';
-    try {
-      console.log('[authService] Attempting direct login to Perfex CRM...');
-      const { data: perfexWrapper } = await perfexApi.post<any>('/auth/login', payload);
-      perfexToken = perfexWrapper.data?.access_token || perfexWrapper.access_token || '';
-      console.log('[authService] Direct login successful.');
-    } catch (error) {
-      console.error('[authService] Direct login failed:', error);
-      throw error;
-    }
-
-    if (perfexToken) {
-      await SecureStore.setItemAsync(PERFEX_TOKEN_KEY, perfexToken);
-    } else {
-      throw new Error('No authentication token received from Perfex CRM.');
-    }
-
-    return {
-      estimatorToken: estToken,
-      perfexToken,
-      user: user,
-    };
+    return { estimatorToken: estToken, perfexToken, user };
   },
 
   loginWithSSOToken: async (token: string): Promise<AuthResponse> => {
-    let perfexToken = '';
     let estToken = '';
     let user: AuthUser = { id: 0, name: 'CRM User', email: '', role: 'staff' };
 
-    // 1. Exchange SSO token with Perfex CRM
+    // 1. Exchange SSO token with Perfex CRM (mandatory)
+    let perfexToken = '';
     try {
-      console.log('[authService] Attempting to exchange Web SSO token for Perfex CRM token...');
       const { data: exchangeData } = await perfexApi.post<any>('/auth/sso/exchange', { token });
       perfexToken = exchangeData.data?.access_token || exchangeData.access_token || exchangeData.data?.token || exchangeData.token;
       if (!perfexToken) {
         throw new Error('SSO exchange response is missing access token');
       }
-      console.log('[authService] Web SSO token exchanged successfully with Perfex.');
     } catch (exchangeError: any) {
-      console.error('[authService] Web SSO exchange with Perfex failed:', exchangeError?.response?.data || exchangeError);
+      if (__DEV__) console.warn('[authService] Web SSO exchange with Perfex failed');
       throw new Error(exchangeError?.response?.data?.error?.message || 'Access denied. Web SSO exchange with Perfex failed.');
     }
+    await SecureStore.setItemAsync(PERFEX_TOKEN_KEY, perfexToken);
 
-    // 2. Exchange SSO token with Estimator App
+    // 2. Exchange SSO token with the Estimator app (optional). Use a bare axios
+    //    call so the estimator interceptor doesn't attach a stale bearer token.
     try {
-      console.log('[authService] Attempting to exchange Web SSO token for Estimator token...');
       const estimatorBaseUrl = ESTIMATOR_API_URL.replace(/\/api\/?$/, '');
       const ssoCallbackUrl = `${estimatorBaseUrl}/sso/callback?token=${encodeURIComponent(token)}`;
-      const { data: estData } = await estimatorApi.get<any>(ssoCallbackUrl, {
-        headers: { Accept: 'application/json' }
+      const { data: estData } = await axios.get<any>(ssoCallbackUrl, {
+        timeout: 10000,
+        headers: { Accept: 'application/json' },
       });
-      
+
       estToken = estData.token || estData.data?.token || '';
       if (estToken) {
-        console.log('[authService] Web SSO token exchanged successfully with Estimator.');
+        await SecureStore.setItemAsync(ESTIMATOR_TOKEN_KEY, estToken);
         if (estData.user) {
           user = {
             id: estData.user.id || 0,
@@ -119,39 +100,11 @@ export const authService = {
           };
         }
       }
-    } catch (estError: any) {
-      console.warn('[authService] Web SSO exchange with Estimator app failed or not available:', estError?.response?.data || estError);
+    } catch {
+      if (__DEV__) console.warn('[authService] Web SSO exchange with Estimator app failed or not available');
     }
 
-    if (perfexToken) {
-      await SecureStore.setItemAsync(PERFEX_TOKEN_KEY, perfexToken);
-    }
-    if (estToken) {
-      await SecureStore.setItemAsync(ESTIMATOR_TOKEN_KEY, estToken);
-    }
-
-    return {
-      estimatorToken: estToken,
-      perfexToken,
-      user,
-    };
-  },
-
-  register: async (payload: RegisterPayload): Promise<AuthResponse> => {
-    // Register only creates an account on the Estimator app.
-    // Perfex CRM staff accounts are managed by admins — no self-registration.
-    const { data: estData } = await estimatorApi.post<{
-      success: boolean;
-      user: AuthUser;
-      token: string;
-    }>('/register', payload);
-    await SecureStore.setItemAsync(ESTIMATOR_TOKEN_KEY, estData.token);
-
-    return {
-      estimatorToken: estData.token,
-      perfexToken: '',
-      user: estData.user,
-    };
+    return { estimatorToken: estToken, perfexToken, user };
   },
 
   logout: async (): Promise<void> => {

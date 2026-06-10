@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import * as SecureStore from '../utils/secureStore';
 import { authService } from '../services/authService';
 import { notificationService } from '../services/notificationService';
+import { authEvents } from '../utils/authEvents';
 import { USER_STORAGE_KEY } from '../constants/config';
 
 interface User {
@@ -19,7 +20,6 @@ interface AuthState {
   isLoading: boolean;
   error: string | null;
   login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string, passwordConfirmation: string) => Promise<void>;
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
   handleSSOLogin: (token: string) => Promise<void>;
@@ -33,20 +33,13 @@ export const useAuthStore = create<AuthState>((set) => ({
   error: null,
 
   login: async (email, password) => {
-    console.log('[authStore] Initiating login for:', email);
     set({ isLoading: true, error: null });
     try {
       const data = await authService.login({ email, password });
-      console.log('[authStore] Login success. Received tokens:', {
-        estToken: !!data.estimatorToken,
-        perfexToken: !!data.perfexToken
-      });
       await SecureStore.setItemAsync(USER_STORAGE_KEY, JSON.stringify(data.user));
       set({ user: data.user, isAuthenticated: true, isLoading: false });
-      console.log('[authStore] Auth state set to authenticated = true');
       notificationService.registerDeviceToken();
     } catch (err: any) {
-      console.error('[authStore] Login failed:', err);
       set({
         error: err.response?.data?.message || err.message || 'Login failed. Check credentials.',
         isLoading: false,
@@ -55,17 +48,13 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   handleSSOLogin: async (token) => {
-    console.log('[authStore] Initiating SSO Login');
     set({ isLoading: true, error: null });
     try {
       const data = await authService.loginWithSSOToken(token);
-      console.log('[authStore] SSO Login success. Tokens stored.');
       await SecureStore.setItemAsync(USER_STORAGE_KEY, JSON.stringify(data.user));
       set({ user: data.user, isAuthenticated: true, isLoading: false });
-      console.log('[authStore] Auth state set to authenticated = true');
       notificationService.registerDeviceToken();
     } catch (err: any) {
-      console.error('[authStore] SSO Login failed:', err);
       set({
         error: err.response?.data?.message || err.message || 'SSO Login failed.',
         isLoading: false,
@@ -73,53 +62,39 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
-  register: async (name, email, password, passwordConfirmation) => {
-    set({ isLoading: true, error: null });
-    try {
-      const data = await authService.register({
-        name,
-        email,
-        password,
-        password_confirmation: passwordConfirmation,
-      });
-      await SecureStore.setItemAsync(USER_STORAGE_KEY, JSON.stringify(data.user));
-      set({ user: data.user, isAuthenticated: true, isLoading: false });
-      notificationService.registerDeviceToken();
-    } catch (err: any) {
-      set({
-        error: err.response?.data?.message || 'Registration failed.',
-        isLoading: false,
-      });
-    }
-  },
-
   logout: async () => {
-    console.log('[authStore] Executing logout... clearing everything.');
     await notificationService.deregisterDeviceToken();
     await authService.logout();
     await SecureStore.deleteItemAsync(USER_STORAGE_KEY);
     set({ user: null, isAuthenticated: false });
-    console.log('[authStore] Auth state set to authenticated = false');
   },
 
   checkAuth: async () => {
-    console.log('[authStore] checkAuth started.');
-    // Session is valid if either the Estimator token OR Perfex token exists
-    const estToken = await authService.getStoredEstimatorToken();
+    // Perfex CRM is the primary backend — without its token there is no session.
     const perfexToken = await authService.getStoredPerfexToken();
-    
-    console.log(`[authStore] checkAuth tokens -> estToken: ${!!estToken}, perfexToken: ${!!perfexToken}`);
-
-    if (!estToken && !perfexToken) {
-      console.log('[authStore] Both tokens missing! Setting isAuthenticated = false');
-      set({ isAuthenticated: false });
+    if (!perfexToken) {
+      set({ user: null, isAuthenticated: false });
       return;
     }
-    const raw = await SecureStore.getItemAsync(USER_STORAGE_KEY);
-    const user = raw ? JSON.parse(raw) : null;
+    let user: User | null = null;
+    try {
+      const raw = await SecureStore.getItemAsync(USER_STORAGE_KEY);
+      user = raw ? JSON.parse(raw) : null;
+    } catch {
+      user = null; // corrupted stored profile must not crash startup
+    }
     set({ user, isAuthenticated: true });
-    console.log('[authStore] checkAuth complete. Setting isAuthenticated = true');
   },
 
   clearError: () => set({ error: null }),
 }));
+
+// The API layer emits this when the primary backend rejects the token (401).
+authEvents.onUnauthorized(() => {
+  SecureStore.deleteItemAsync(USER_STORAGE_KEY).catch(() => {});
+  useAuthStore.setState({
+    user: null,
+    isAuthenticated: false,
+    error: 'Your session has expired. Please sign in again.',
+  });
+});

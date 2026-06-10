@@ -1,152 +1,157 @@
-import { ScrollView, View, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { ScrollView, View, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { Text, IconButton } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuthStore } from '../../store/authStore';
 import { useLeads } from '../../hooks/useLeads';
 import { useEstimates } from '../../hooks/useEstimates';
 import { useReminders } from '../../hooks/useReminders';
 import { LeadCard } from '../../components/leads/LeadCard';
 import { EstimateCard } from '../../components/estimates/EstimateCard';
+import { ScreenHeader } from '../../components/ui/ScreenHeader';
+import { toDateKey } from '../../utils/format';
 import { theme } from '../../constants/theme';
 
 export default function DashboardScreen() {
   const router = useRouter();
   const { user, logout } = useAuthStore();
 
-  const leadsQuery = useLeads({ page: 1 });
+  const leadsQuery = useLeads({ limit: 5 });
   const estimatesQuery = useEstimates();
   const remindersQuery = useReminders();
 
-  const isLoading = leadsQuery.isLoading && estimatesQuery.isLoading;
-
-  const today = new Date().toDateString();
+  const todayKey = toDateKey(new Date().toISOString());
   const dueTodayCount = remindersQuery.data?.filter(
-    (r) => new Date(r.due_date).toDateString() === today && !r.is_read
+    (r) => toDateKey(r.due_date) === todayKey && !r.is_read
   ).length ?? 0;
 
   const totalLeads = leadsQuery.data?.pages?.[0]?.total;
-  const isLeadsLoading = leadsQuery.isLoading;
+  const totalEstimates = estimatesQuery.data?.pages?.[0]?.total;
 
-  const pendingEstimates = estimatesQuery.data?.total;
-  const isEstimatesLoading = estimatesQuery.isLoading;
+  const leads = leadsQuery.data?.pages?.flatMap((p) => p.leads)?.slice(0, 5) || [];
+  const estimates = estimatesQuery.data?.pages?.flatMap((p) => p.data)?.slice(0, 5) || [];
 
-  const leads = leadsQuery.data?.pages?.flatMap(p => p.leads)?.slice(0, 5) || [];
-  const estimates = estimatesQuery.data?.data?.slice(0, 5) || [];
+  const handleLogout = () => {
+    Alert.alert('Sign out?', 'You will need to log in again to use the app.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Sign out', style: 'destructive', onPress: () => logout() },
+    ]);
+  };
 
   const formatTodayDate = () => {
     const date = new Date();
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    
+
     const dayName = days[date.getDay()];
     const dayNum = String(date.getDate()).padStart(2, '0');
     const monthName = months[date.getMonth()];
     const year = date.getFullYear();
-    
+
     return `${dayName}, ${dayNum} ${monthName} ${year}`;
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
-      <View style={styles.header}>
-        <View style={styles.headerTextContainer}>
-          <Text style={styles.headerTitle}>Hello, {user?.name}</Text>
-          <Text style={styles.headerSubtitle}>{formatTodayDate()}</Text>
-        </View>
-        <View style={styles.headerActions}>
-          <IconButton icon="bell-outline" size={24} iconColor={theme.colors.primary} onPress={() => {}} style={styles.headerIconBtn} />
-          <IconButton icon="calendar-month" size={24} iconColor={theme.colors.primary} onPress={() => router.push('/(tabs)/calendar')} style={styles.headerIconBtn} />
-          <IconButton icon="logout" size={24} iconColor={theme.colors.primary} onPress={logout} style={styles.headerIconBtn} />
-        </View>
-      </View>
+      <ScreenHeader
+        title={`Hello, ${user?.name ?? 'there'}`}
+        subtitle={formatTodayDate()}
+        actions={
+          <IconButton
+            icon="logout"
+            size={24}
+            iconColor={theme.colors.primary}
+            onPress={handleLogout}
+            style={styles.headerIconBtn}
+            accessibilityLabel="Sign out"
+          />
+        }
+      />
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-
-        {isLoading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={theme.colors.primary} />
+        {/* Summary Cards Row */}
+        <View style={styles.statsRow}>
+          {/* Card 1 — Total Leads */}
+          <View style={[styles.card, { backgroundColor: '#cfebba' }]}>
+            {leadsQuery.isLoading ? (
+              <ActivityIndicator size="small" color={theme.colors.primary} />
+            ) : (
+              <Text style={styles.cardValue}>{totalLeads ?? 0}</Text>
+            )}
+            <Text style={styles.cardLabel}>Total Leads</Text>
           </View>
-        ) : (
-          <>
-            {/* Summary Cards Row */}
-            <View style={styles.statsRow}>
-              {/* Card 1 — Total Leads */}
-              <View style={[styles.card, { backgroundColor: '#cfebba' }]}>
-                {isLeadsLoading ? (
-                  <ActivityIndicator size="small" color={theme.colors.primary} />
-                ) : (
-                  <Text style={styles.cardValue}>{totalLeads ?? 0}</Text>
-                )}
-                <Text style={styles.cardLabel}>Total Leads</Text>
-              </View>
 
-              {/* Card 2 — Total Estimates */}
-              <View style={[styles.card, { backgroundColor: '#b2f746' }]}>
-                {isEstimatesLoading ? (
-                  <ActivityIndicator size="small" color={theme.colors.primary} />
-                ) : (
-                  <Text style={styles.cardValue}>{pendingEstimates ?? 0}</Text>
-                )}
-                <Text style={styles.cardLabel}>Estimates</Text>
-              </View>
+          {/* Card 2 — Total Estimates */}
+          <View style={[styles.card, { backgroundColor: '#b2f746' }]}>
+            {estimatesQuery.isLoading ? (
+              <ActivityIndicator size="small" color={theme.colors.primary} />
+            ) : (
+              <Text style={styles.cardValue}>{totalEstimates ?? 0}</Text>
+            )}
+            <Text style={styles.cardLabel}>Estimates</Text>
+          </View>
 
-              {/* Card 3 — Due Today */}
-              <View style={[styles.card, { backgroundColor: '#ffd8ed' }]}>
-                {remindersQuery.isLoading ? (
-                  <ActivityIndicator size="small" color={theme.colors.primary} />
-                ) : (
-                  <Text style={styles.cardValue}>{dueTodayCount}</Text>
-                )}
-                <Text style={styles.cardLabel}>Due Today</Text>
-              </View>
-            </View>
+          {/* Card 3 — Due Today */}
+          <View style={[styles.card, { backgroundColor: '#ffd8ed' }]}>
+            {remindersQuery.isLoading ? (
+              <ActivityIndicator size="small" color={theme.colors.primary} />
+            ) : (
+              <Text style={styles.cardValue}>{dueTodayCount}</Text>
+            )}
+            <Text style={styles.cardLabel}>Due Today</Text>
+          </View>
+        </View>
 
-            {/* Recent Leads Section */}
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Recent Leads</Text>
-                <TouchableOpacity onPress={() => router.push('/(tabs)/leads')}>
-                  <Text style={styles.seeAll}>See all</Text>
-                </TouchableOpacity>
-              </View>
-              {leads.length === 0 ? (
-                <Text style={styles.emptyText}>No leads yet</Text>
-              ) : (
-                leads.map((lead) => (
-                  <LeadCard
-                    key={lead.id}
-                    lead={lead}
-                    onPress={() => router.push(`/lead/${lead.id}`)}
-                  />
-                ))
-              )}
-            </View>
+        {/* Recent Leads Section — each section owns its loading/error state */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Recent Leads</Text>
+            <TouchableOpacity onPress={() => router.push('/(tabs)/leads')} accessibilityRole="button">
+              <Text style={styles.seeAll}>See all</Text>
+            </TouchableOpacity>
+          </View>
+          {leadsQuery.isLoading ? (
+            <ActivityIndicator size="small" color={theme.colors.primary} style={styles.sectionLoader} />
+          ) : leadsQuery.isError ? (
+            <Text style={styles.emptyText}>Couldn't load leads — pull down to retry</Text>
+          ) : leads.length === 0 ? (
+            <Text style={styles.emptyText}>No leads yet</Text>
+          ) : (
+            leads.map((lead) => (
+              <LeadCard
+                key={lead.id}
+                lead={lead}
+                onPress={() => router.push(`/lead/${lead.id}`)}
+              />
+            ))
+          )}
+        </View>
 
-            {/* Recent Estimates Section */}
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Recent Estimates</Text>
-                <TouchableOpacity onPress={() => router.push('/(tabs)/estimates')}>
-                  <Text style={styles.seeAll}>See all</Text>
-                </TouchableOpacity>
-              </View>
-              {estimates.length === 0 ? (
-                <Text style={styles.emptyText}>No estimates yet</Text>
-              ) : (
-                estimates.map((estimate) => (
-                  <EstimateCard
-                    key={estimate.id}
-                    estimate={estimate}
-                    onPress={() => router.push(`/estimate/${estimate.id}`)}
-                  />
-                ))
-              )}
-            </View>
-          </>
-        )}
+        {/* Recent Estimates Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Recent Estimates</Text>
+            <TouchableOpacity onPress={() => router.push('/(tabs)/estimates')} accessibilityRole="button">
+              <Text style={styles.seeAll}>See all</Text>
+            </TouchableOpacity>
+          </View>
+          {estimatesQuery.isLoading ? (
+            <ActivityIndicator size="small" color={theme.colors.primary} style={styles.sectionLoader} />
+          ) : estimatesQuery.isError ? (
+            <Text style={styles.emptyText}>Couldn't load estimates — pull down to retry</Text>
+          ) : estimates.length === 0 ? (
+            <Text style={styles.emptyText}>No estimates yet</Text>
+          ) : (
+            estimates.map((estimate) => (
+              <EstimateCard
+                key={estimate.id}
+                estimate={estimate}
+                onPress={() => router.push(`/estimate/${estimate.id}`)}
+              />
+            ))
+          )}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -160,47 +165,8 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: theme.spacing.gapLg,
   },
-  logoutButton: {
-    marginRight: theme.spacing.paddingX,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: theme.spacing.paddingX,
-    paddingTop: 16,
-    paddingBottom: 24,
-    backgroundColor: theme.colors.background,
-  },
-  headerTextContainer: {
-    flexDirection: 'column',
-  },
-  headerTitle: {
-    ...theme.typography.headlineXlMobile,
-    fontSize: 25,
-    color: theme.colors.primary,
-    letterSpacing: -0.5,
-  },
-  headerSubtitle: {
-    ...theme.typography.labelSm,
-    fontSize: 9,
-    color: 'rgba(68, 72, 63, 0.6)',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginTop: 2,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    gap: 0,
-  },
   headerIconBtn: {
     margin: 0,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 120,
   },
   statsRow: {
     flexDirection: 'row',
@@ -221,6 +187,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.02,
     shadowRadius: 4,
+    elevation: 1,
   },
   cardValue: {
     ...theme.typography.headlineLg,
@@ -248,6 +215,9 @@ const styles = StyleSheet.create({
     color: theme.colors.primary,
     fontWeight: '700',
   },
+  sectionLoader: {
+    paddingVertical: theme.spacing.gapMd,
+  },
   seeAll: {
     ...theme.typography.labelMd,
     color: theme.colors.primary,
@@ -260,4 +230,3 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.gapSm,
   },
 });
-

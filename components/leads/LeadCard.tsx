@@ -1,7 +1,10 @@
+import React from 'react';
 import { TouchableOpacity, View, StyleSheet } from 'react-native';
 import { Text, Chip } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Lead } from '../../services/leadsService';
+import { getStatusStyles } from '../../utils/statusColors';
+import { formatShortDate } from '../../utils/format';
 import { theme } from '../../constants/theme';
 
 interface Props {
@@ -9,29 +12,17 @@ interface Props {
   onPress: () => void;
 }
 
-const getStatusStyles = (status: string) => {
-  const normalized = status.toLowerCase();
-  if (normalized.includes('new') || normalized.includes('custom') || normalized.includes('accept') || normalized.includes('approv')) {
-    return { backgroundColor: '#cfebba', textColor: '#1b300f' }; // Light green tint
-  }
-  if (normalized.includes('contact') || normalized.includes('remind') || normalized.includes('pend')) {
-    return { backgroundColor: '#ffd8ed', textColor: '#290a21' }; // Pink tint
-  }
-  if (normalized.includes('lost') || normalized.includes('junk') || normalized.includes('declin') || normalized.includes('expir') || normalized.includes('fail')) {
-    return { backgroundColor: '#ffdad6', textColor: '#ba1a1a' }; // Red tint
-  }
-  return { backgroundColor: '#eeeeec', textColor: '#44483f' }; // Gray tint
-};
-
-export function LeadCard({ lead, onPress }: Props) {
+export const LeadCard = React.memo(function LeadCard({ lead, onPress }: Props) {
   const statusStyles = getStatusStyles(lead.status);
-  const formattedDate = new Date(lead.date_added).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-  });
 
   return (
-    <TouchableOpacity onPress={onPress} style={styles.card} activeOpacity={0.9}>
+    <TouchableOpacity
+      onPress={onPress}
+      style={styles.card}
+      activeOpacity={0.9}
+      accessibilityRole="button"
+      accessibilityLabel={`Lead ${lead.name}, status ${lead.status}`}
+    >
       <View style={styles.topSection}>
         <View style={styles.nameEmailContainer}>
           <Text style={styles.name} numberOfLines={1}>{lead.name}</Text>
@@ -39,7 +30,7 @@ export function LeadCard({ lead, onPress }: Props) {
         </View>
         <Chip
           style={[styles.chip, { backgroundColor: statusStyles.backgroundColor }]}
-          textStyle={[styles.chipText, { color: statusStyles.textColor }]}
+          textStyle={[styles.chipText, { color: statusStyles.color }]}
           compact
         >
           {lead.status}
@@ -51,16 +42,16 @@ export function LeadCard({ lead, onPress }: Props) {
           <MaterialCommunityIcons name="phone-outline" size={18} color={theme.colors.outline} />
           <Text style={styles.phoneText} numberOfLines={1}>{lead.phone || 'No Phone'}</Text>
         </View>
-        <Text style={styles.dateText}>{formattedDate}</Text>
+        <Text style={styles.dateText}>{formatShortDate(lead.date_added)}</Text>
       </View>
     </TouchableOpacity>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: {
     backgroundColor: theme.colors.surface,
-    borderRadius: theme.roundness.lg, // 16px equivalent
+    borderRadius: theme.roundness.lg,
     padding: 24,
     marginHorizontal: theme.spacing.margin,
     marginVertical: theme.spacing.gapSm,

@@ -27,7 +27,7 @@ export interface LeadDetail extends Lead {
   hash: string;
   notes: LeadNote[];
   attachments: LeadAttachment[];
-  reminders: Reminder[];
+  reminders: LeadReminder[];
   activity_log: ActivityLogEntry[];
   custom_fields: CustomFieldDefinition[];
   custom_field_values: Record<string, string>;
@@ -51,7 +51,7 @@ export interface LeadAttachment {
   dateadded: string;
 }
 
-export interface Reminder {
+export interface LeadReminder {
   id: number;
   rel_id: string;
   rel_type: string;
@@ -127,7 +127,7 @@ export interface GetLeadsParams {
   limit?: number;
 }
 
-const translateReminder = (r: any): Reminder => ({
+const translateReminder = (r: any): LeadReminder => ({
   id: Number(r.id),
   rel_id: r.rel_id,
   rel_type: r.rel_type,
@@ -141,16 +141,20 @@ const translateReminder = (r: any): Reminder => ({
   is_notified: typeof r.is_notified === 'number' ? r.is_notified : Number(r.isnotified),
 });
 
+// `String(undefined)` is the truthy string "undefined" — never use it as a
+// fallback chain link or the UI will literally render "undefined".
+const asLabel = (value: unknown): string => (value == null ? '' : String(value));
+
 const translateLead = (raw: any): Lead => ({
   id: Number(raw.id),
   name: raw.name || '',
   email: raw.email || '',
   phone: raw.phonenumber || '',
   company: raw.company || '',
-  status: raw.status_name || String(raw.status) || '',
-  status_id: String(raw.status),
-  source: raw.source_name || String(raw.source) || '',
-  assigned_to: raw.assigned_name || String(raw.assigned) || 'Unassigned',
+  status: raw.status_name || asLabel(raw.status),
+  status_id: asLabel(raw.status),
+  source: raw.source_name || asLabel(raw.source),
+  assigned_to: raw.assigned_name || asLabel(raw.assigned) || 'Unassigned',
   date_added: raw.dateadded || new Date().toISOString(),
   last_contact: raw.lastcontact || null,
   value: raw.lead_value ? Number(raw.lead_value) : null,
@@ -212,18 +216,10 @@ const translateLeadDetail = (raw: any, rest: any): LeadDetail => ({
 
 export const leadsService = {
   getAll: async (params?: GetLeadsParams): Promise<{ leads: Lead[]; page: number; total: number }> => {
-    try {
-      console.log(`[leadsService] Fetching leads with params:`, params);
-      const { data: wrapper } = await perfexApi.get<any>('/leads', { params });
-      console.log(`[leadsService] Raw API response wrapper:`, JSON.stringify(wrapper).substring(0, 300) + '...');
-      const raw = wrapper.data || [];
-      console.log(`[leadsService] Extracted raw data array length:`, raw.length);
-      const leads = raw.map(translateLead);
-      return { leads, page: params?.page || 1, total: wrapper.total ?? raw.length };
-    } catch (e: any) {
-      console.error(`[leadsService] Failed to fetch leads:`, e?.response?.data || e.message);
-      throw e;
-    }
+    const { data: wrapper } = await perfexApi.get<any>('/leads', { params });
+    const raw = wrapper.data || [];
+    const leads = raw.map(translateLead);
+    return { leads, page: params?.page || 1, total: wrapper.total ?? raw.length };
   },
 
   getById: async (id: number): Promise<LeadDetail> => {
@@ -272,7 +268,7 @@ export const leadsService = {
     return wrapper.data;
   },
 
-  getReminders: async (leadId: number): Promise<Reminder[]> => {
+  getReminders: async (leadId: number): Promise<LeadReminder[]> => {
     const { data: wrapper } = await perfexApi.get<any>(`/leads/${leadId}/reminders`);
     return (wrapper.data || []).map(translateReminder);
   },

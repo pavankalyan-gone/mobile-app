@@ -1,5 +1,5 @@
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { leadsService, CreateLeadPayload, AddReminderPayload, GetLeadsParams } from '../services/leadsService';
+import { leadsService, CreateLeadPayload, AddReminderPayload, GetLeadsParams, LeadDetail } from '../services/leadsService';
 
 export const useLeads = (params?: GetLeadsParams) =>
   useInfiniteQuery({
@@ -50,9 +50,27 @@ export const useUpdateLead = () => {
 export const useUpdateLeadStatus = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, status }: { id: number; status: number | string }) =>
+    mutationFn: ({ id, status }: { id: number; status: number | string; statusName?: string }) =>
       leadsService.updateStatus(id, status),
-    onSuccess: (_, variables) => {
+    // Optimistically reflect the new status in the detail cache; roll back on error.
+    onMutate: async ({ id, status, statusName }) => {
+      await queryClient.cancelQueries({ queryKey: ['lead', id] });
+      const previous = queryClient.getQueryData<LeadDetail>(['lead', id]);
+      if (previous && statusName) {
+        queryClient.setQueryData<LeadDetail>(['lead', id], {
+          ...previous,
+          status: statusName,
+          status_id: String(status),
+        });
+      }
+      return { previous };
+    },
+    onError: (_err, variables, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['lead', variables.id], context.previous);
+      }
+    },
+    onSettled: (_data, _err, variables) => {
       queryClient.invalidateQueries({ queryKey: ['leads'] });
       queryClient.invalidateQueries({ queryKey: ['lead', variables.id] });
     },

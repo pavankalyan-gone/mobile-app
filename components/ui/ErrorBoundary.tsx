@@ -24,7 +24,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('Uncaught error in boundary:', error, errorInfo);
+    if (__DEV__) console.error('Uncaught error in boundary:', error, errorInfo);
   }
 
   private handleRetry = () => {
@@ -63,16 +63,6 @@ export class ErrorBoundary extends Component<Props, State> {
             >
               Try again
             </Button>
-
-            {/* Secondary Action */}
-            <Button
-              mode="text"
-              onPress={this.handleRetry}
-              textColor={theme.colors.secondary}
-              style={styles.secondaryButton}
-            >
-              Go back to Dashboard
-            </Button>
           </View>
 
           {/* Error Code Footer */}
@@ -99,7 +89,7 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: theme.colors.surface,
-    borderRadius: 32,
+    borderRadius: theme.roundness.xl,
     borderWidth: 1,
     borderColor: theme.colors.borderSubtle,
     padding: 32,
@@ -143,9 +133,6 @@ const styles = StyleSheet.create({
   },
   buttonContent: {
     height: 56,
-  },
-  secondaryButton: {
-    marginTop: theme.spacing.gapSm,
   },
   footer: {
     position: 'absolute',

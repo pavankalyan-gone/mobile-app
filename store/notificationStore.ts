@@ -15,6 +15,7 @@ interface NotificationState {
   unreadCount: number;
   addNotification: (n: Notifications.Notification) => void;
   markAllRead: () => void;
+  clearAll: () => void;
 }
 
 export const useNotificationStore = create<NotificationState>((set) => ({
@@ -30,11 +31,20 @@ export const useNotificationStore = create<NotificationState>((set) => ({
       receivedAt: new Date(),
       read: false,
     };
-    set((state) => ({
-      notifications: [item, ...state.notifications].slice(0, 50),
-      unreadCount: state.unreadCount + 1,
-    }));
+    set((state) => {
+      const notifications = [item, ...state.notifications].slice(0, 50);
+      return {
+        notifications,
+        unreadCount: notifications.filter((x) => !x.read).length,
+      };
+    });
   },
 
-  markAllRead: () => set({ unreadCount: 0, notifications: [] }),
+  markAllRead: () =>
+    set((state) => ({
+      unreadCount: 0,
+      notifications: state.notifications.map((n) => ({ ...n, read: true })),
+    })),
+
+  clearAll: () => set({ notifications: [], unreadCount: 0 }),
 }));

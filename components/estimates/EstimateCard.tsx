@@ -1,6 +1,9 @@
+import React from 'react';
 import { TouchableOpacity, View, StyleSheet } from 'react-native';
 import { Text, Chip } from 'react-native-paper';
 import { Estimate } from '../../services/estimatesService';
+import { getStatusStyles } from '../../utils/statusColors';
+import { formatDate, formatINR } from '../../utils/format';
 import { theme } from '../../constants/theme';
 
 interface Props {
@@ -8,30 +11,17 @@ interface Props {
   onPress: () => void;
 }
 
-const getStatusStyles = (status: string) => {
-  const norm = status.toLowerCase().replace(/\s+/g, '_');
-  if (norm.includes('accept') || norm.includes('approv')) {
-    return { backgroundColor: '#cfebba', textColor: '#1b300f' }; // Light forest tint
-  }
-  if (norm.includes('declin') || norm.includes('expir')) {
-    return { backgroundColor: '#ffdad6', textColor: '#ba1a1a' }; // Red error tint
-  }
-  if (norm.includes('sent') || norm.includes('wait') || norm.includes('pend')) {
-    return { backgroundColor: '#ffd8ed', textColor: '#290a21' }; // Pink tertiary tint
-  }
-  return { backgroundColor: '#eeeeec', textColor: '#44483f' }; // Muted gray tint
-};
-
-export function EstimateCard({ estimate, onPress }: Props) {
+export const EstimateCard = React.memo(function EstimateCard({ estimate, onPress }: Props) {
   const statusStyles = getStatusStyles(estimate.status);
-  const formattedDate = new Date(estimate.valid_until).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
 
   return (
-    <TouchableOpacity onPress={onPress} style={styles.card} activeOpacity={0.9}>
+    <TouchableOpacity
+      onPress={onPress}
+      style={styles.card}
+      activeOpacity={0.9}
+      accessibilityRole="button"
+      accessibilityLabel={`Estimate ${estimate.estimate_number}, status ${estimate.status}`}
+    >
       {/* Header Row: Estimate Number & Client Info on Left, Status on Right */}
       <View style={styles.row}>
         <View style={styles.clientInfo}>
@@ -40,7 +30,7 @@ export function EstimateCard({ estimate, onPress }: Props) {
         </View>
         <Chip
           style={[styles.chip, { backgroundColor: statusStyles.backgroundColor }]}
-          textStyle={[styles.chipText, { color: statusStyles.textColor }]}
+          textStyle={[styles.chipText, { color: statusStyles.color }]}
           compact
         >
           {estimate.status}
@@ -51,44 +41,44 @@ export function EstimateCard({ estimate, onPress }: Props) {
       <View style={styles.bottomRow}>
         <View style={styles.dateContainer}>
           <Text style={styles.dateLabel}>VALID UNTIL</Text>
-          <Text style={styles.dateText}>{formattedDate}</Text>
+          <Text style={styles.dateText}>{formatDate(estimate.valid_until)}</Text>
         </View>
         <View style={styles.totalBadge}>
-          <Text style={styles.totalText}>₹{estimate.total.toLocaleString('en-IN')}</Text>
+          <Text style={styles.totalText}>{formatINR(estimate.total)}</Text>
         </View>
       </View>
     </TouchableOpacity>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: {
     backgroundColor: theme.colors.surface,
-    borderRadius: 32,
+    borderRadius: theme.roundness.lg,
     padding: 24,
     marginHorizontal: theme.spacing.margin,
     marginVertical: theme.spacing.gapSm,
     borderWidth: 1,
     borderColor: theme.colors.borderSubtle,
-    shadowColor: theme.colors.primary,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.02,
-    shadowRadius: 6,
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
     elevation: 1,
     gap: 16,
   },
-  row: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'flex-start',
   },
   clientInfo: {
     flex: 1,
     marginRight: 8,
   },
-  number: { 
+  number: {
     ...theme.typography.headlineMd,
-    fontWeight: '700', 
+    fontWeight: '700',
     color: theme.colors.primary,
   },
   clientName: {
@@ -133,7 +123,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.primary,
     paddingHorizontal: 18,
     paddingVertical: 10,
-    borderRadius: 16,
+    borderRadius: theme.roundness.lg,
     shadowColor: theme.colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,

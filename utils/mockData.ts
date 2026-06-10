@@ -605,8 +605,8 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
     const id = Number(estSubmitMatch[1]);
     const index = estimates.findIndex(e => e.id === id);
     if (index !== -1) {
-      estimates[index].status = 'sent';
-      return makeResponse({ success: true, message: "Estimate submitted" });
+      estimates[index].status = 'waiting_approval';
+      return makeResponse({ success: true, message: "Estimate submitted for approval" });
     }
   }
 
@@ -616,8 +616,8 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
     const id = Number(estApproveMatch[1]);
     const index = estimates.findIndex(e => e.id === id);
     if (index !== -1) {
-      estimates[index].status = 'accepted';
-      return makeResponse({ success: true, message: "Estimate accepted by client" });
+      estimates[index].status = 'approved';
+      return makeResponse({ success: true, message: "Estimate approved" });
     }
   }
 

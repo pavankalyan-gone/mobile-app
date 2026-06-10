@@ -1,7 +1,6 @@
 import axios from 'axios';
 import * as SecureStore from '../utils/secureStore';
 import { ESTIMATOR_API_URL, ESTIMATOR_TOKEN_KEY, MOCK_MODE } from '../constants/config';
-import { mockAdapter } from '../utils/mockData';
 
 const estimatorApi = axios.create({
   baseURL: ESTIMATOR_API_URL,
@@ -12,8 +11,10 @@ const estimatorApi = axios.create({
   },
 });
 
-if (MOCK_MODE) {
-  estimatorApi.defaults.adapter = mockAdapter as any;
+if (__DEV__ && MOCK_MODE) {
+  // Lazy require so the mock server is excluded from release bundles
+  const { mockAdapter } = require('../utils/mockData');
+  estimatorApi.defaults.adapter = mockAdapter;
 }
 
 estimatorApi.interceptors.request.use(async (config) => {
@@ -26,12 +27,9 @@ estimatorApi.interceptors.response.use(
   (response) => response,
   async (error) => {
     if (error.response?.status === 401) {
-      console.warn('[estimatorApi] Received 401 Unauthorized from:', error.config?.url);
+      // Estimator is the secondary backend — drop its token but keep the
+      // session alive as long as the Perfex token is still valid.
       await SecureStore.deleteItemAsync(ESTIMATOR_TOKEN_KEY);
-      // Re-evaluate auth state (will logout only if both tokens are gone)
-      const { useAuthStore } = require('../store/authStore');
-      console.log('[estimatorApi] Calling checkAuth() to re-evaluate session...');
-      useAuthStore.getState().checkAuth();
     }
     return Promise.reject(error);
   }

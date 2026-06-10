@@ -5,7 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../../constants/theme';
 
 interface EmptyStateProps {
-  icon: string;
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
   title: string;
   subtitle: string;
   buttonText?: string;
@@ -24,7 +24,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
       <View style={styles.card}>
         {/* Icon wrapper */}
         <View style={styles.iconWrapper}>
-          <MaterialCommunityIcons name={icon as any} size={40} color={theme.colors.outline} />
+          <MaterialCommunityIcons name={icon} size={40} color={theme.colors.outline} />
         </View>
 
         {/* Title */}
