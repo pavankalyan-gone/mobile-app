@@ -531,12 +531,22 @@ export const leadsService = {
   },
 
   addNote: async (id: number, description: string): Promise<{ message: string }> => {
-    const { data: wrapper } = await perfexApi.post<any>(`/lead_note/${id}`, { description });
+    // This endpoint reads the raw JSON body (a form body gets "Description is
+    // required"), so request JSON-first; a 400 still falls back to form.
+    const { data: wrapper } = await perfexApi.post<any>(
+      `/lead_note/${id}`,
+      { description },
+      { _bodyEncoding: 'json' } as any
+    );
     return wrapper.data;
   },
 
   updateNote: async (noteId: number, description: string): Promise<{ message: string }> => {
-    const { data: wrapper } = await perfexApi.post<any>(`/lead_note_update/${noteId}`, { description, lead_note_description: description });
+    const { data: wrapper } = await perfexApi.post<any>(
+      `/lead_note_update/${noteId}`,
+      { description },
+      { _bodyEncoding: 'json' } as any
+    );
     return wrapper.data;
   },
 
