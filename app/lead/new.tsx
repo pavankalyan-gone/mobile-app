@@ -166,9 +166,10 @@ export default function NewLeadScreen() {
               <TextInput
                 key={field.id}
                 label={`${field.name}${field.required === '1' ? ' *' : ''}`}
-                value={customFieldValues[field.slug || field.name] || ''}
+                value={customFieldValues[String(field.id)] || ''}
                 onChangeText={(text) =>
-                  setCustomFieldValues((prev) => ({ ...prev, [field.slug || field.name]: text }))
+                  // The API expects custom_fields.leads keyed by numeric field ID
+                  setCustomFieldValues((prev) => ({ ...prev, [String(field.id)]: text }))
                 }
                 mode="outlined"
                 style={styles.input}

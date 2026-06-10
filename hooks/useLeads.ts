@@ -161,6 +161,8 @@ export const useAddLeadReminder = () => {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['lead-reminders', variables.leadId] });
+      // The calendar tab and dashboard "due today" count read the global list
+      queryClient.invalidateQueries({ queryKey: ['reminders'] });
     },
   });
 };
@@ -172,6 +174,7 @@ export const useDeleteLeadReminder = () => {
       leadsService.deleteReminder(leadId, reminderId),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['lead-reminders', variables.leadId] });
+      queryClient.invalidateQueries({ queryKey: ['reminders'] });
     },
   });
 };

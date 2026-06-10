@@ -155,7 +155,10 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
       const prev = appStateRef.current;
       appStateRef.current = nextState;
 
-      if (prev === 'active' && nextState === 'background') {
+      // iOS never jumps straight to 'background' — it passes through 'inactive'
+      // (and a call over a foregrounded app may only ever reach 'inactive'),
+      // so record the departure on the first transition away from active.
+      if (prev === 'active' && (nextState === 'inactive' || nextState === 'background')) {
         backgroundedAtRef.current = Date.now();
       }
 

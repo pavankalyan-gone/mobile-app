@@ -20,7 +20,11 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.yourcompany.mobileapp",
-      "versionCode": 1
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.READ_PHONE_STATE",
+        "android.permission.READ_CALL_LOG"
+      ]
     },
     "scheme": ["mobileapp", "perfex-mobile"],
     "web": {
