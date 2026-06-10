@@ -61,7 +61,8 @@ export default function LoginScreen() {
         throw new Error('SSO is not enabled on the server.');
       }
 
-      const ssoUrl = data.data.auth.sso_url;
+      // Use nexus_login_url if available to authenticate across both CRM and Estimator platforms
+      const ssoUrl = data.data.auth.nexus_login_url || data.data.auth.sso_url;
 
       const result = await WebBrowser.openAuthSessionAsync(ssoUrl, 'perfex-mobile://auth/callback');
 

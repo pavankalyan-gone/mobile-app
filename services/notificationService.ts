@@ -3,7 +3,7 @@ import * as Device from 'expo-device';
 import * as SecureStore from '../utils/secureStore';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
-import estimatorApi from './estimatorApi';
+import perfexApi from './perfexApi';
 
 const PUSH_TOKEN_KEY = 'expo_push_token';
 
@@ -64,7 +64,7 @@ export const notificationService = {
     await SecureStore.setItemAsync(PUSH_TOKEN_KEY, token);
 
     try {
-      await estimatorApi.post('/devices/register', {
+      await perfexApi.post('/devices/register', {
         token,
         platform: Platform.OS,
       });
@@ -78,7 +78,7 @@ export const notificationService = {
     if (!token) return;
 
     try {
-      await estimatorApi.post('/devices/deregister', { token });
+      await perfexApi.post('/devices/deregister', { token });
       await SecureStore.deleteItemAsync(PUSH_TOKEN_KEY);
     } catch (error) {
       if (__DEV__) console.warn('Failed to deregister device token:', error);

@@ -79,7 +79,6 @@ export default function EditLeadScreen() {
           phonenumber: phone.trim() || undefined,
           lead_value: leadValue,
           address: address.trim() || undefined,
-          dateadded: addedOn.trim() || undefined,
           source: sourceId || undefined,
           assigned: assignedId || undefined,
           custom_fields: Object.keys(customFieldValues).length > 0 ? { leads: customFieldValues } : undefined,
@@ -267,17 +266,6 @@ export default function EditLeadScreen() {
                 ))}
               </Menu>
             </View>
-
-            <TextInput
-              label="Added on"
-              value={addedOn}
-              onChangeText={setAddedOn}
-              mode="outlined"
-              style={styles.input}
-              outlineStyle={styles.inputOutline}
-              theme={inputTheme}
-              activeOutlineColor={theme.colors.primary}
-            />
 
             <TextInput
               label="Lead value (₹)"

@@ -52,26 +52,66 @@ perfexApi.interceptors.request.use(async (config) => {
       const data = typeof config.data === 'string' ? JSON.parse(config.data) : (config.data || {});
       data.csrf_token_name = csrfTokenCache;
       
-      const serializeParams = (obj: any, prefix?: string): string => {
-        const str: string[] = [];
+      // Custom URL encoding builder that handles nested objects/arrays for CodeIgniter
+      const buildUrlEncoded = (obj: any, prefix?: string): string[] => {
+        const parts: string[] = [];
         for (const p in obj) {
           if (obj.hasOwnProperty(p)) {
             const k = prefix ? `${prefix}[${p}]` : p;
             const v = obj[p];
-            if (v !== null && typeof v === 'object') {
-              str.push(serializeParams(v, k));
+            if (v !== null && typeof v === 'object' && !(v instanceof File) && !(v instanceof Blob)) {
+              parts.push(...buildUrlEncoded(v, k));
             } else if (v !== undefined) {
-              str.push(encodeURIComponent(k) + '=' + encodeURIComponent(v));
+              parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`);
             }
           }
         }
-        return str.join('&');
+        return parts;
       };
       
-      // Convert to x-www-form-urlencoded so CI3 can read $_POST['csrf_token_name']
-      // and properly parse nested arrays like $_POST['custom_fields']
-      config.data = serializeParams(data);
-      config.headers['Content-Type'] = 'application/x-www-form-urlencoded';
+      // If we're not sending actual files, x-www-form-urlencoded is safer in React Native
+      // as Axios sometimes drops the boundary or body for FormData without files.
+      const hasFiles = Object.values(data).some(v => v instanceof File || (v && typeof v === 'object' && (v as any).uri));
+      
+      if (!hasFiles) {
+        config.data = buildUrlEncoded(data).join('&');
+        config.headers['Content-Type'] = 'application/x-www-form-urlencoded';
+        
+        if (config.url && config.url.includes('lead_note')) {
+          console.log("=== LEAD NOTE DEBUG ===");
+          console.log("Original Object:", data);
+          console.log("URL Encoded String:", config.data);
+          console.log("Content-Type:", config.headers['Content-Type']);
+          console.log("=======================");
+        }
+      } else {
+        const formData = new FormData();
+        const appendFormData = (obj: any, prefix?: string) => {
+          for (const p in obj) {
+            if (obj.hasOwnProperty(p)) {
+              const k = prefix ? `${prefix}[${p}]` : p;
+              const v = obj[p];
+              if (v !== null && typeof v === 'object' && !(v instanceof File) && !(v as any).uri) {
+                appendFormData(v, k);
+              } else if (v !== undefined) {
+                formData.append(k, v as any);
+              }
+            }
+          }
+        };
+        appendFormData(data);
+        config.data = formData;
+        if (config.headers['Content-Type']) {
+          delete config.headers['Content-Type'];
+        }
+        
+        if (config.url && config.url.includes('lead_note')) {
+          console.log("=== LEAD NOTE DEBUG (FormData) ===");
+          console.log("FormData sent for:", config.url);
+          console.log("=======================");
+        }
+      }
+      
     } else {
       config.headers['Content-Type'] = 'application/json';
     }

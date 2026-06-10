@@ -105,8 +105,15 @@ export const useMarkLeadJunk = () => {
 export const useAddLeadNote = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, description }: { id: number; description: string }) =>
-      leadsService.addNote(id, description),
+    mutationFn: async ({ id, description }: { id: number; description: string }) => {
+      try {
+        return await leadsService.addNote(id, description);
+      } catch (err: any) {
+        console.error("ADD NOTE ERROR RESPONSE:", err.response?.status, err.response?.data);
+        console.error("ADD NOTE ERROR MESSAGE:", err.message);
+        throw err;
+      }
+    },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['lead', variables.id] });
     },
@@ -145,8 +152,15 @@ export const useLeadReminders = (leadId: number) =>
 export const useAddLeadReminder = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ leadId, payload }: { leadId: number; payload: AddReminderPayload }) =>
-      leadsService.addReminder(leadId, payload),
+    mutationFn: async ({ leadId, payload }: { leadId: number; payload: AddReminderPayload }) => {
+      try {
+        return await leadsService.addReminder(leadId, payload);
+      } catch (err: any) {
+        console.error("ADD REMINDER ERROR RESPONSE:", err.response?.status, err.response?.data);
+        console.error("ADD REMINDER ERROR MESSAGE:", err.message);
+        throw err;
+      }
+    },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['lead-reminders', variables.leadId] });
     },

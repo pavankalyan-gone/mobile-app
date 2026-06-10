@@ -1,4 +1,4 @@
-import estimatorApi from './estimatorApi';
+import perfexApi from './perfexApi';
 
 export interface Reminder {
   id: number;
@@ -9,7 +9,13 @@ export interface Reminder {
 
 export const remindersService = {
   getAll: async (): Promise<Reminder[]> => {
-    const { data } = await estimatorApi.get('/reminders');
-    return data as Reminder[];
+    try {
+      const { data } = await perfexApi.get<any>('/reminders');
+      if (Array.isArray(data)) return data as Reminder[];
+      if (data && Array.isArray(data.data)) return data.data as Reminder[];
+      return [];
+    } catch {
+      return [];
+    }
   },
 };

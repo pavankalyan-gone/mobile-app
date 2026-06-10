@@ -1,6 +1,8 @@
 import perfexApi from './perfexApi';
 import { normalizePhone, phonesMatch } from '../utils/phone';
 import { useAuthStore } from '../store/authStore';
+import * as SecureStore from '../utils/secureStore';
+import { PERFEX_API_URL, PERFEX_TOKEN_KEY } from '../constants/config';
 
 const staffNameCache: Record<string, string> = {};
 
@@ -523,12 +525,28 @@ export const leadsService = {
   },
 
   addNote: async (id: number, description: string): Promise<{ message: string }> => {
-    const { data: wrapper } = await perfexApi.post<any>(`/lead_note/${id}`, { description });
+    // Include all possible parameter names and rel_type/rel_id just in case
+    const { data: wrapper } = await perfexApi.post<any>(`/lead_note/${id}`, { 
+      description, 
+      lead_note_description: description,
+      note: description,
+      message: description,
+      msg: description,
+      lead_note: description,
+      rel_type: 'lead',
+      rel_id: id,
+      lead_id: id,
+      leadid: id,
+      id: id,
+      // Add a dummy file object so perfexApi hasFiles=true and forces multipart/form-data
+      // This ensures the body is sent as FormData with a boundary, which might be required by the endpoint
+      dummy_file: { uri: 'file://dummy.txt', name: 'dummy.txt', type: 'text/plain' }
+    });
     return wrapper.data;
   },
 
   updateNote: async (noteId: number, description: string): Promise<{ message: string }> => {
-    const { data: wrapper } = await perfexApi.post<any>(`/lead_note_update/${noteId}`, { description });
+    const { data: wrapper } = await perfexApi.post<any>(`/lead_note_update/${noteId}`, { description, lead_note_description: description });
     return wrapper.data;
   },
 

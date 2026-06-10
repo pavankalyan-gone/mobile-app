@@ -21,9 +21,9 @@ export default function DashboardScreen() {
   const remindersQuery = useReminders();
 
   const todayKey = toDateKey(new Date().toISOString());
-  const dueTodayCount = remindersQuery.data?.filter(
-    (r) => toDateKey(r.due_date) === todayKey && !r.is_read
-  ).length ?? 0;
+  const dueTodayCount = Array.isArray(remindersQuery.data)
+    ? remindersQuery.data.filter((r) => toDateKey(r.due_date) === todayKey && !r.is_read).length
+    : 0;
 
   const totalLeads = leadsQuery.data?.pages?.[0]?.total;
   const totalEstimates = estimatesQuery.data?.pages?.[0]?.total;
