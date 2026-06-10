@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, ActivityIndicator, StyleSheet, AppState, AppStateStatus } from 'react-native';
+import { View, Text, ActivityIndicator, StyleSheet, AppState, AppStateStatus, LogBox } from 'react-native';
+
+LogBox.ignoreLogs([
+  'expo-notifications: Android Push notifications',
+]);
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { PaperProvider, MD3LightTheme } from 'react-native-paper';

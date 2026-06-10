@@ -15,4 +15,4 @@ export const USER_STORAGE_KEY = 'auth_user';
  * It can NEVER be enabled in a release build (`__DEV__` guard); in dev it is
  * on by default and can be disabled with EXPO_PUBLIC_MOCK_MODE=false.
  */
-export const MOCK_MODE = __DEV__ && process.env.EXPO_PUBLIC_MOCK_MODE !== 'false';
+export const MOCK_MODE = false;

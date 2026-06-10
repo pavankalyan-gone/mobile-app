@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, RefreshControl, TouchableOpacity, TextInput } from 'react-native';
+import { View, StyleSheet, RefreshControl, TouchableOpacity, TextInput, ScrollView } from 'react-native';
 import { ActivityIndicator, Chip, Text, Portal, Modal, IconButton, Button } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { FlashList, ListRenderItemInfo } from '@shopify/flash-list';
@@ -129,6 +129,8 @@ export default function LeadsScreen() {
           data={allLeads}
           keyExtractor={(item) => String(item.id)}
           renderItem={renderLead}
+          // @ts-ignore - TS types for FlashList are missing estimatedItemSize in this project's setup
+          estimatedItemSize={120}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.colors.primary} />
           }
@@ -174,48 +176,60 @@ export default function LeadsScreen() {
           onDismiss={() => setFilterModalVisible(false)}
           contentContainerStyle={styles.modalContent}
         >
-          <Text style={styles.modalTitle}>Advanced Filters</Text>
-
-          <Text style={styles.filterSectionTitle}>Status</Text>
-          <View style={styles.filterOptions}>
-            <Chip selected={statusFilter === ''} onPress={() => setStatusFilter('')} style={styles.filterOptionChip}>All</Chip>
-            {statuses?.map((status) => (
-              <Chip
-                key={status.id}
-                selected={statusFilter === status.id}
-                onPress={() => setStatusFilter(status.id)}
-                style={styles.filterOptionChip}
-              >
-                {status.name}
-              </Chip>
-            ))}
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Advanced Filters</Text>
+            <IconButton
+              icon="close"
+              size={24}
+              iconColor={theme.colors.onSurface}
+              onPress={() => setFilterModalVisible(false)}
+              style={styles.modalCloseBtn}
+              accessibilityLabel="Close filters"
+            />
           </View>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 16, paddingTop: 8 }}>
 
-          <Text style={styles.filterSectionTitle}>Assigned To</Text>
-          <View style={styles.filterOptions}>
-            <Chip selected={assignedFilter === ''} onPress={() => setAssignedFilter('')} style={styles.filterOptionChip}>All</Chip>
-            <Chip selected={assignedFilter === 'me'} onPress={() => setAssignedFilter('me')} style={styles.filterOptionChip}>Me</Chip>
-            <Chip selected={assignedFilter === 0} onPress={() => setAssignedFilter(0)} style={styles.filterOptionChip}>Unassigned</Chip>
-          </View>
+            <Text style={styles.filterSectionTitle}>Status</Text>
+            <View style={styles.filterOptions}>
+              <Chip selected={statusFilter === ''} onPress={() => setStatusFilter('')} style={styles.filterOptionChip}>All</Chip>
+              {statuses?.map((status) => (
+                <Chip
+                  key={status.id}
+                  selected={statusFilter === status.id}
+                  onPress={() => setStatusFilter(status.id)}
+                  style={styles.filterOptionChip}
+                >
+                  {status.name}
+                </Chip>
+              ))}
+            </View>
 
-          <Text style={styles.filterSectionTitle}>Source</Text>
-          <View style={styles.filterOptions}>
-            <Chip selected={sourceFilter === ''} onPress={() => setSourceFilter('')} style={styles.filterOptionChip}>All</Chip>
-            <Chip selected={sourceFilter === 1} onPress={() => setSourceFilter(1)} style={styles.filterOptionChip}>Organic</Chip>
-            <Chip selected={sourceFilter === 2} onPress={() => setSourceFilter(2)} style={styles.filterOptionChip}>Referral</Chip>
-            <Chip selected={sourceFilter === 3} onPress={() => setSourceFilter(3)} style={styles.filterOptionChip}>Ads</Chip>
-          </View>
+            <Text style={styles.filterSectionTitle}>Assigned To</Text>
+            <View style={styles.filterOptions}>
+              <Chip selected={assignedFilter === ''} onPress={() => setAssignedFilter('')} style={styles.filterOptionChip}>All</Chip>
+              <Chip selected={assignedFilter === 'me'} onPress={() => setAssignedFilter('me')} style={styles.filterOptionChip}>Me</Chip>
+              <Chip selected={assignedFilter === 0} onPress={() => setAssignedFilter(0)} style={styles.filterOptionChip}>Unassigned</Chip>
+            </View>
 
-          <Text style={styles.filterSectionTitle}>Sort By</Text>
-          <View style={styles.filterOptions}>
-            <Chip selected={sortFilter === ''} onPress={() => setSortFilter('')} style={styles.filterOptionChip}>Newest First</Chip>
-            <Chip selected={sortFilter === 'name'} onPress={() => setSortFilter('name')} style={styles.filterOptionChip}>Name</Chip>
-            <Chip selected={sortFilter === 'company'} onPress={() => setSortFilter('company')} style={styles.filterOptionChip}>Company</Chip>
-          </View>
+            <Text style={styles.filterSectionTitle}>Source</Text>
+            <View style={styles.filterOptions}>
+              <Chip selected={sourceFilter === ''} onPress={() => setSourceFilter('')} style={styles.filterOptionChip}>All</Chip>
+              <Chip selected={sourceFilter === 1} onPress={() => setSourceFilter(1)} style={styles.filterOptionChip}>Organic</Chip>
+              <Chip selected={sourceFilter === 2} onPress={() => setSourceFilter(2)} style={styles.filterOptionChip}>Referral</Chip>
+              <Chip selected={sourceFilter === 3} onPress={() => setSourceFilter(3)} style={styles.filterOptionChip}>Ads</Chip>
+            </View>
 
-          <Button mode="contained" onPress={() => setFilterModalVisible(false)} style={styles.applyFiltersBtn} buttonColor={theme.colors.primary} textColor={theme.colors.onPrimary}>
-            Apply Filters
-          </Button>
+            <Text style={styles.filterSectionTitle}>Sort By</Text>
+            <View style={styles.filterOptions}>
+              <Chip selected={sortFilter === ''} onPress={() => setSortFilter('')} style={styles.filterOptionChip}>Newest First</Chip>
+              <Chip selected={sortFilter === 'name'} onPress={() => setSortFilter('name')} style={styles.filterOptionChip}>Name</Chip>
+              <Chip selected={sortFilter === 'company'} onPress={() => setSortFilter('company')} style={styles.filterOptionChip}>Company</Chip>
+            </View>
+
+            <Button mode="contained" onPress={() => setFilterModalVisible(false)} style={styles.applyFiltersBtn} buttonColor={theme.colors.primary} textColor={theme.colors.onPrimary}>
+              Apply Filters
+            </Button>
+          </ScrollView>
         </Modal>
       </Portal>
     </SafeAreaView>
@@ -265,11 +279,23 @@ const styles = StyleSheet.create({
     padding: theme.spacing.margin,
     margin: theme.spacing.margin,
     borderRadius: theme.roundness.xl,
+    maxHeight: '80%', // Ensure modal doesn't stretch beyond screen and allows scrolling
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.borderSubtle,
+    paddingBottom: theme.spacing.gapSm,
+    marginBottom: theme.spacing.gapSm,
   },
   modalTitle: {
     ...theme.typography.headlineMd,
     color: theme.colors.primary,
-    marginBottom: theme.spacing.gapMd,
+  },
+  modalCloseBtn: {
+    margin: 0,
   },
   filterSectionTitle: {
     ...theme.typography.labelLg,

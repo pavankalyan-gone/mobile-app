@@ -9,11 +9,12 @@ export const useLeads = (params?: GetLeadsParams) =>
     getNextPageParam: (lastPage) => {
       if (!lastPage) return undefined;
       const limit = params?.limit || 20;
-      const totalPages = Math.ceil((lastPage.total || 0) / limit);
-      if (lastPage.page < totalPages) {
-        return lastPage.page + 1;
+      // The API doesn't return the total number of items, so if we got fewer items than requested,
+      // it means there are no more pages.
+      if (lastPage.leads.length < limit) {
+        return undefined;
       }
-      return undefined;
+      return lastPage.page + 1;
     },
     staleTime: 1000 * 60 * 2,
   });
@@ -112,6 +113,28 @@ export const useAddLeadNote = () => {
   });
 };
 
+export const useUpdateLeadNote = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ leadId, noteId, description }: { leadId: number; noteId: number; description: string }) =>
+      leadsService.updateNote(noteId, description),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['lead', variables.leadId] });
+    },
+  });
+};
+
+export const useDeleteLeadNote = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ leadId, noteId }: { leadId: number; noteId: number }) =>
+      leadsService.deleteNote(noteId),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['lead', variables.leadId] });
+    },
+  });
+};
+
 export const useLeadReminders = (leadId: number) =>
   useQuery({
     queryKey: ['lead-reminders', leadId],
@@ -130,6 +153,17 @@ export const useAddLeadReminder = () => {
   });
 };
 
+export const useDeleteLeadReminder = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ leadId, reminderId }: { leadId: number; reminderId: number }) =>
+      leadsService.deleteReminder(leadId, reminderId),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['lead-reminders', variables.leadId] });
+    },
+  });
+};
+
 export const useLeadCustomFields = (type: string = 'leads') =>
   useQuery({
     queryKey: ['custom-fields', type],
@@ -141,5 +175,19 @@ export const useLeadStatuses = () =>
   useQuery({
     queryKey: ['lead-statuses'],
     queryFn: () => leadsService.getStatuses(),
+    staleTime: 1000 * 60 * 10,
+  });
+
+export const useLeadSources = () =>
+  useQuery({
+    queryKey: ['lead-sources'],
+    queryFn: () => leadsService.getSources(),
+    staleTime: 1000 * 60 * 10,
+  });
+
+export const useStaffs = () =>
+  useQuery({
+    queryKey: ['staffs'],
+    queryFn: () => leadsService.getStaffs(),
     staleTime: 1000 * 60 * 10,
   });

@@ -3,7 +3,8 @@ import { TouchableOpacity, View, StyleSheet } from 'react-native';
 import { Text, Chip } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Lead } from '../../services/leadsService';
-import { getStatusStyles } from '../../utils/statusColors';
+import { getExactStatusStyles } from '../../utils/statusColors';
+import { useLeadCustomFields } from '../../hooks/useLeads';
 import { formatShortDate } from '../../utils/format';
 import { theme } from '../../constants/theme';
 
@@ -13,7 +14,19 @@ interface Props {
 }
 
 export const LeadCard = React.memo(function LeadCard({ lead, onPress }: Props) {
-  const statusStyles = getStatusStyles(lead.status);
+  const statusStyles = getExactStatusStyles(lead.status, lead.status_color);
+  const { data: customFields } = useLeadCustomFields('leads');
+
+  const activeCustomFields = customFields && customFields.length > 0 
+    ? customFields 
+    : (lead.custom_fields || []);
+
+  // Take up to 2 custom fields that have values
+  const visibleCustomFields = activeCustomFields
+    .filter(f => (lead.custom_field_values?.[f.slug || ''] || 
+                  lead.custom_field_values?.[f.name || ''] || 
+                  lead.custom_field_values?.[String(f.id)]))
+    .slice(0, 2);
 
   return (
     <TouchableOpacity
@@ -27,14 +40,32 @@ export const LeadCard = React.memo(function LeadCard({ lead, onPress }: Props) {
         <View style={styles.nameEmailContainer}>
           <Text style={styles.name} numberOfLines={1}>{lead.name}</Text>
           <Text style={styles.email} numberOfLines={1}>{lead.email || 'No Email'}</Text>
+          {visibleCustomFields.length > 0 && (
+            <View style={styles.customFieldsContainer}>
+              {visibleCustomFields.map((f, i) => {
+                const value = lead.custom_field_values?.[f.slug || ''] || 
+                              lead.custom_field_values?.[f.name || ''] || 
+                              lead.custom_field_values?.[String(f.id)];
+                return (
+                  <Text key={f.id} style={styles.customFieldText} numberOfLines={1}>
+                    <Text style={styles.customFieldLabel}>{f.name}: </Text>
+                    {value}
+                  </Text>
+                );
+              })}
+            </View>
+          )}
         </View>
-        <Chip
-          style={[styles.chip, { backgroundColor: statusStyles.backgroundColor }]}
-          textStyle={[styles.chipText, { color: statusStyles.color }]}
-          compact
-        >
-          {lead.status}
-        </Chip>
+        <View style={styles.chipContainer}>
+          <Chip
+            style={[styles.chip, { backgroundColor: statusStyles.backgroundColor }]}
+            textStyle={[styles.chipText, { color: statusStyles.color }]}
+            compact
+            ellipsizeMode="tail"
+          >
+            {lead.status}
+          </Chip>
+        </View>
       </View>
 
       <View style={styles.bottomSection}>
@@ -71,6 +102,7 @@ const styles = StyleSheet.create({
   },
   nameEmailContainer: {
     flex: 1,
+    flexShrink: 1,
     marginRight: 16,
     gap: 4,
   },
@@ -83,6 +115,23 @@ const styles = StyleSheet.create({
     ...theme.typography.bodyMd,
     color: theme.colors.onSurfaceVariant,
     opacity: 0.7,
+  },
+  customFieldsContainer: {
+    marginTop: 4,
+    gap: 2,
+  },
+  customFieldText: {
+    ...theme.typography.labelSm,
+    color: theme.colors.onSurfaceVariant,
+    opacity: 0.8,
+  },
+  customFieldLabel: {
+    fontWeight: '600',
+  },
+  chipContainer: {
+    flexShrink: 0,
+    maxWidth: '45%',
+    alignItems: 'flex-end',
   },
   chip: {
     borderRadius: theme.roundness.full,

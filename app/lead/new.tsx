@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
-import { TextInput, Button, HelperText } from 'react-native-paper';
+import { TextInput, Button, HelperText, ActivityIndicator } from 'react-native-paper';
 import { Stack, useRouter } from 'expo-router';
-import { useCreateLead } from '../../hooks/useLeads';
+import { useCreateLead, useLeadCustomFields } from '../../hooks/useLeads';
 import { theme } from '../../constants/theme';
 
 export default function NewLeadScreen() {
@@ -16,7 +16,10 @@ export default function NewLeadScreen() {
   const [phone, setPhone] = useState('');
   const [value, setValue] = useState('');
   const [description, setDescription] = useState('');
+  const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
+
+  const { data: customFields, isLoading: isLoadingCustomFields } = useLeadCustomFields('leads');
 
   const handleSubmit = () => {
     const trimmedName = name.trim();
@@ -44,6 +47,7 @@ export default function NewLeadScreen() {
         phonenumber: phone.trim() || undefined,
         lead_value: leadValue,
         description: description.trim() || undefined,
+        custom_fields: Object.keys(customFieldValues).length > 0 ? { leads: customFieldValues } : undefined,
       },
       {
         onSuccess: (result) => {
@@ -152,6 +156,33 @@ export default function NewLeadScreen() {
           maxLength={2000}
         />
 
+        {isLoadingCustomFields ? (
+          <View style={{ padding: 20 }}>
+            <ActivityIndicator size="small" color={theme.colors.primary} />
+          </View>
+        ) : customFields && customFields.length > 0 ? (
+          <View style={styles.customFieldsSection}>
+            {customFields.map((field) => (
+              <TextInput
+                key={field.id}
+                label={`${field.name}${field.required === '1' ? ' *' : ''}`}
+                value={customFieldValues[field.slug || field.name] || ''}
+                onChangeText={(text) =>
+                  setCustomFieldValues((prev) => ({ ...prev, [field.slug || field.name]: text }))
+                }
+                mode="outlined"
+                style={styles.input}
+                outlineStyle={styles.inputOutline}
+                activeOutlineColor={theme.colors.primary}
+                theme={inputTheme}
+                keyboardType={field.type === 'number' ? 'numeric' : 'default'}
+                multiline={field.type === 'textarea'}
+                numberOfLines={field.type === 'textarea' ? 3 : 1}
+              />
+            ))}
+          </View>
+        ) : null}
+
         {formError && (
           <HelperText type="error" visible style={styles.errorText}>
             {formError}
@@ -212,5 +243,8 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: theme.spacing.gapLg,
+  },
+  customFieldsSection: {
+    marginTop: theme.spacing.gapSm,
   },
 });

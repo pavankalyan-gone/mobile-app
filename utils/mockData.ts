@@ -159,6 +159,19 @@ const customFields = [
   }
 ];
 
+// Use this to parse config.data which could be JSON or x-www-form-urlencoded
+const parseConfigData = (data: any) => {
+  if (typeof data === 'string') {
+    try {
+      return JSON.parse(data);
+    } catch {
+      const searchParams = new URLSearchParams(data);
+      return Object.fromEntries(searchParams.entries());
+    }
+  }
+  return data;
+};
+
 const leadStatuses = [
   { id: 1, name: "Customer" },
   { id: 2, name: "Lead" },
@@ -295,7 +308,7 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
 
   // Create Lead
   if (cleanUrl.endsWith('/lead_create') && method === 'post') {
-    const body = typeof config.data === 'string' ? JSON.parse(config.data) : config.data;
+    const body = parseConfigData(config.data);
     const newId = String(leads.length + 1);
     const newLead = {
       id: newId,
@@ -349,7 +362,17 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
   const leadUpdateMatch = cleanUrl.match(/\/lead_update\/(\d+)$/);
   if (leadUpdateMatch && method === 'post') {
     const id = leadUpdateMatch[1];
-    const body = typeof config.data === 'string' ? JSON.parse(config.data) : config.data;
+    let body;
+    if (typeof config.data === 'string') {
+      try {
+        body = JSON.parse(config.data);
+      } catch {
+        const searchParams = new URLSearchParams(config.data);
+        body = Object.fromEntries(searchParams.entries());
+      }
+    } else {
+      body = config.data;
+    }
     const index = leads.findIndex(l => l.id === id);
     if (index !== -1) {
       leads[index] = {
@@ -369,7 +392,7 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
   const leadStatusUpdateMatch = cleanUrl.match(/\/leads\/(\d+)\/status$/);
   if (leadStatusUpdateMatch && method === 'post') {
     const id = leadStatusUpdateMatch[1];
-    const body = typeof config.data === 'string' ? JSON.parse(config.data) : config.data;
+    const body = parseConfigData(config.data);
     const index = leads.findIndex(l => l.id === id);
     if (index !== -1) {
       leads[index].status = String(body.status);
@@ -427,7 +450,7 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
   const leadNoteMatch = cleanUrl.match(/\/lead_note\/(\d+)$/);
   if (leadNoteMatch && method === 'post') {
     const id = leadNoteMatch[1];
-    const body = typeof config.data === 'string' ? JSON.parse(config.data) : config.data;
+    const body = parseConfigData(config.data);
     const lead = leads.find(l => l.id === id);
     if (lead) {
       const newNote = {
@@ -458,7 +481,7 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
   const leadAddReminderMatch = cleanUrl.match(/\/lead_reminder\/(\d+)$/);
   if (leadAddReminderMatch && method === 'post') {
     const id = leadAddReminderMatch[1];
-    const body = typeof config.data === 'string' ? JSON.parse(config.data) : config.data;
+    const body = parseConfigData(config.data);
     const lead = leads.find(l => l.id === id);
     if (lead) {
       const newRem = {
@@ -499,7 +522,7 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
     }
 
     if (method === 'post') {
-      const body = typeof config.data === 'string' ? JSON.parse(config.data) : config.data;
+      const body = parseConfigData(config.data);
       const newId = estimates.length + 1;
       const client = clients.find(c => c.id === body.client_id);
       const newEst = {
@@ -544,7 +567,7 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
         return makeResponse(est);
       }
       if (method === 'put') {
-        const body = typeof config.data === 'string' ? JSON.parse(config.data) : config.data;
+        const body = parseConfigData(config.data);
         const index = estimates.findIndex(e => e.id === id);
         if (index !== -1) {
           estimates[index] = { ...estimates[index], ...body };
@@ -642,7 +665,7 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
         return makeResponse(est.comments || []);
       }
       if (method === 'post') {
-        const body = typeof config.data === 'string' ? JSON.parse(config.data) : config.data;
+        const body = parseConfigData(config.data);
         const newComm = {
           id: (est.comments || []).length + 1,
           estimate_id: id,
@@ -666,7 +689,7 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
 
   // Product Suggestion
   if (cleanUrl.endsWith('/products/suggest')) {
-    const body = typeof config.data === 'string' ? JSON.parse(config.data) : config.data;
+    const body = parseConfigData(config.data);
     return makeResponse({
       suggested_description: `Professional deployment of ${body.name || 'Equipment'} featuring customizable service plans and standard integration.`,
       suggested_category: "Software Services"

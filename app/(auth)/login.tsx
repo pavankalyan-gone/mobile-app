@@ -61,7 +61,7 @@ export default function LoginScreen() {
         throw new Error('SSO is not enabled on the server.');
       }
 
-      const ssoUrl = data.data.auth.nexus_login_url;
+      const ssoUrl = data.data.auth.sso_url;
 
       const result = await WebBrowser.openAuthSessionAsync(ssoUrl, 'perfex-mobile://auth/callback');
 
