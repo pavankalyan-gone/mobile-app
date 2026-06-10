@@ -45,13 +45,40 @@ perfexApi.interceptors.request.use(async (config) => {
     if (!csrfTokenCache) await fetchCsrfToken();
 
     if (csrfTokenCache && csrfCookieStr) {
-      config.headers.Cookie = config.headers.Cookie 
-        ? `${config.headers.Cookie}; ${csrfCookieStr}` 
-        : csrfCookieStr;
+      // Drop any stale csrf cookie (e.g. on a replayed request) before attaching
+      const existing = (config.headers.Cookie || '')
+        .split(';')
+        .map((c: string) => c.trim())
+        .filter((c: string) => c && !c.startsWith('csrf_cookie_name='));
+      config.headers.Cookie = [...existing, csrfCookieStr].join('; ');
       
-      const data = typeof config.data === 'string' ? JSON.parse(config.data) : (config.data || {});
+      // The body may already be a string when a request is re-dispatched after a
+      // CSRF retry (urlencoded) or was provided pre-serialized (JSON).
+      let data: any;
+      if (typeof config.data === 'string') {
+        try {
+          data = JSON.parse(config.data);
+        } catch {
+          data = {};
+          for (const pair of config.data.split('&')) {
+            if (!pair) continue;
+            const eq = pair.indexOf('=');
+            const k = decodeURIComponent(eq === -1 ? pair : pair.slice(0, eq));
+            data[k] = eq === -1 ? '' : decodeURIComponent(pair.slice(eq + 1));
+          }
+        }
+      } else {
+        data = config.data || {};
+      }
       data.csrf_token_name = csrfTokenCache;
-      
+
+      // `File` is not a global in React Native (Hermes) — referencing it bare
+      // throws a ReferenceError inside this interceptor and rejects every POST.
+      const isFileLike = (v: any): boolean =>
+        (typeof File !== 'undefined' && v instanceof File) ||
+        (typeof Blob !== 'undefined' && v instanceof Blob) ||
+        (v && typeof v === 'object' && typeof (v as any).uri === 'string');
+
       // Custom URL encoding builder that handles nested objects/arrays for CodeIgniter
       const buildUrlEncoded = (obj: any, prefix?: string): string[] => {
         const parts: string[] = [];
@@ -59,7 +86,7 @@ perfexApi.interceptors.request.use(async (config) => {
           if (obj.hasOwnProperty(p)) {
             const k = prefix ? `${prefix}[${p}]` : p;
             const v = obj[p];
-            if (v !== null && typeof v === 'object' && !(v instanceof File) && !(v instanceof Blob)) {
+            if (v !== null && typeof v === 'object' && !isFileLike(v)) {
               parts.push(...buildUrlEncoded(v, k));
             } else if (v !== undefined) {
               parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`);
@@ -68,22 +95,14 @@ perfexApi.interceptors.request.use(async (config) => {
         }
         return parts;
       };
-      
+
       // If we're not sending actual files, x-www-form-urlencoded is safer in React Native
       // as Axios sometimes drops the boundary or body for FormData without files.
-      const hasFiles = Object.values(data).some(v => v instanceof File || (v && typeof v === 'object' && (v as any).uri));
-      
+      const hasFiles = Object.values(data).some(isFileLike);
+
       if (!hasFiles) {
         config.data = buildUrlEncoded(data).join('&');
         config.headers['Content-Type'] = 'application/x-www-form-urlencoded';
-        
-        if (config.url && config.url.includes('lead_note')) {
-          console.log("=== LEAD NOTE DEBUG ===");
-          console.log("Original Object:", data);
-          console.log("URL Encoded String:", config.data);
-          console.log("Content-Type:", config.headers['Content-Type']);
-          console.log("=======================");
-        }
       } else {
         const formData = new FormData();
         const appendFormData = (obj: any, prefix?: string) => {
@@ -91,7 +110,7 @@ perfexApi.interceptors.request.use(async (config) => {
             if (obj.hasOwnProperty(p)) {
               const k = prefix ? `${prefix}[${p}]` : p;
               const v = obj[p];
-              if (v !== null && typeof v === 'object' && !(v instanceof File) && !(v as any).uri) {
+              if (v !== null && typeof v === 'object' && !isFileLike(v)) {
                 appendFormData(v, k);
               } else if (v !== undefined) {
                 formData.append(k, v as any);
@@ -104,14 +123,8 @@ perfexApi.interceptors.request.use(async (config) => {
         if (config.headers['Content-Type']) {
           delete config.headers['Content-Type'];
         }
-        
-        if (config.url && config.url.includes('lead_note')) {
-          console.log("=== LEAD NOTE DEBUG (FormData) ===");
-          console.log("FormData sent for:", config.url);
-          console.log("=======================");
-        }
       }
-      
+
     } else {
       config.headers['Content-Type'] = 'application/json';
     }
@@ -141,7 +154,15 @@ perfexApi.interceptors.response.use(
       await SecureStore.deleteItemAsync(PERFEX_TOKEN_KEY);
       authEvents.emitUnauthorized();
     }
-    // Clear cache on 403 (e.g., 419 Page Expired mapped to 403) so we fetch a fresh one
+    // CodeIgniter rotates the CSRF token, so a cached one can go stale and the
+    // server answers 403 (419 Page Expired mapped to 403). The request was not
+    // processed, so it is safe to fetch a fresh token and replay it once.
+    if (error.response?.status === 403 && error.config && !error.config._csrfRetried) {
+      csrfTokenCache = null;
+      csrfCookieStr = null;
+      error.config._csrfRetried = true;
+      return perfexApi.request(error.config);
+    }
     if (error.response?.status === 403) {
       csrfTokenCache = null;
       csrfCookieStr = null;

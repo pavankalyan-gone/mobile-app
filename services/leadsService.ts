@@ -1,8 +1,6 @@
 import perfexApi from './perfexApi';
 import { useAuthStore } from '../store/authStore';
 import { normalizePhone, phonesMatch } from '../utils/phone';
-import * as SecureStore from '../utils/secureStore';
-import { PERFEX_API_URL, PERFEX_TOKEN_KEY } from '../constants/config';
 
 const staffNameCache: Record<string, string> = {};
 
@@ -525,30 +523,7 @@ export const leadsService = {
   },
 
   addNote: async (id: number, description: string): Promise<{ message: string }> => {
-    // Some custom APIs fail to resolve the Bearer token user ID for core model functions.
-    // If add_note fails in the database, lazy APIs often return "Description is required".
-    // We pass the user's ID as addedfrom / staff_id to prevent database insert failures.
-    const user = useAuthStore.getState().user;
-    const staffId = user?.id || '';
-
-    // Include all possible parameter names and rel_type/rel_id just in case
-    const { data: wrapper } = await perfexApi.post<any>(`/lead_note/${id}`, { 
-      description, 
-      lead_note_description: description,
-      note: description,
-      message: description,
-      msg: description,
-      lead_note: description,
-      rel_type: 'lead',
-      rel_id: id,
-      lead_id: id,
-      leadid: id,
-      id: id,
-      addedfrom: staffId,
-      staff_id: staffId,
-      staffid: staffId,
-      data: JSON.stringify({ description, lead_note_description: description })
-    });
+    const { data: wrapper } = await perfexApi.post<any>(`/lead_note/${id}`, { description });
     return wrapper.data;
   },
 

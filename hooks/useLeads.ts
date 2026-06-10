@@ -109,8 +109,7 @@ export const useAddLeadNote = () => {
       try {
         return await leadsService.addNote(id, description);
       } catch (err: any) {
-        console.error("ADD NOTE ERROR RESPONSE:", err.response?.status, err.response?.data);
-        console.error("ADD NOTE ERROR MESSAGE:", err.message);
+        if (__DEV__) console.error('Add note failed:', err.response?.status, err.response?.data ?? err.message);
         throw err;
       }
     },
@@ -156,8 +155,7 @@ export const useAddLeadReminder = () => {
       try {
         return await leadsService.addReminder(leadId, payload);
       } catch (err: any) {
-        console.error("ADD REMINDER ERROR RESPONSE:", err.response?.status, err.response?.data);
-        console.error("ADD REMINDER ERROR MESSAGE:", err.message);
+        if (__DEV__) console.error('Add reminder failed:', err.response?.status, err.response?.data ?? err.message);
         throw err;
       }
     },
