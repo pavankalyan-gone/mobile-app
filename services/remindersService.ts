@@ -9,13 +9,11 @@ export interface Reminder {
 
 export const remindersService = {
   getAll: async (): Promise<Reminder[]> => {
-    try {
-      const { data } = await perfexApi.get<any>('/reminders');
-      if (Array.isArray(data)) return data as Reminder[];
-      if (data && Array.isArray(data.data)) return data.data as Reminder[];
-      return [];
-    } catch {
-      return [];
-    }
+    // Failures must propagate so React Query retries and reports isError
+    // instead of caching an empty list as fresh data.
+    const { data } = await perfexApi.get<any>('/reminders');
+    if (Array.isArray(data)) return data as Reminder[];
+    if (data && Array.isArray(data.data)) return data.data as Reminder[];
+    return [];
   },
 };

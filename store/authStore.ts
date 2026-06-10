@@ -66,7 +66,9 @@ export const useAuthStore = create<AuthState>((set) => ({
     await notificationService.deregisterDeviceToken();
     await authService.logout();
     await SecureStore.deleteItemAsync(USER_STORAGE_KEY);
-    set({ user: null, isAuthenticated: false });
+    // Also reset error: logging out with an already-expired token trips the
+    // 401 handler below, which would leave "session expired" on the login screen.
+    set({ user: null, isAuthenticated: false, error: null, isLoading: false });
   },
 
   checkAuth: async () => {

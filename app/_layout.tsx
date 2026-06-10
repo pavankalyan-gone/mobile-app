@@ -70,37 +70,71 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     let cancelled = false;
     let stopDetection: (() => void) | null = null;
 
+    // The lead lookup for an incoming number races against the call ending
+    // (short ring, slow network). Track the active lookup generation and
+    // whether the call ended mid-lookup so a late result can't raise a banner
+    // for a finished call or leave a pendingCall that gets misattributed.
+    let lookupGen = 0;
+    let endedDuringLookup: 'Disconnected' | 'Missed' | null = null;
+
     startCallDetection(async (event, rawNumber) => {
       const callStore = useCallStore.getState();
 
       if (event === 'Incoming' && rawNumber) {
+        const gen = ++lookupGen;
+        endedDuringLookup = null;
         try {
           // Multi-variant lookup so formatting differences can't hide a client
           const matched = await leadsService.findByPhone(rawNumber);
+          if (gen !== lookupGen) return; // a newer call superseded this lookup
 
-          if (matched) {
-            // Raises the in-app caller banner on whatever screen is open
-            callStore.setIncomingCall({
-              leadId: matched.id,
-              leadName: matched.name,
-              leadPhone: rawNumber,
-            });
-
-            // Local notification covers the user being outside the app
-            await Notifications.scheduleNotificationAsync({
-              content: {
-                title: `📞 Incoming call — ${matched.name}`,
-                body: `Lead calling from ${rawNumber}`,
-                data: { lead_id: matched.id },
-                sound: true,
-              },
-              trigger: null,
-            });
-          } else {
+          if (!matched) {
             // An unrelated call superseded whatever was pending — don't let a
             // stale outgoing call get attributed to this conversation.
             callStore.clearPendingCall();
+            return;
           }
+
+          callStore.setIncomingCall({
+            leadId: matched.id,
+            leadName: matched.name,
+            leadPhone: rawNumber,
+          });
+
+          if (endedDuringLookup) {
+            // The call already ended while we were matching the number —
+            // skip the banner and go straight to the follow-up popup.
+            const ended = endedDuringLookup;
+            useCallStore.getState().showModal();
+            if (AppState.currentState !== 'active') {
+              await Notifications.scheduleNotificationAsync({
+                content: {
+                  title: ended === 'Missed'
+                    ? `📵 Missed call — ${matched.name}`
+                    : `📝 Log your call with ${matched.name}`,
+                  body: ended === 'Missed'
+                    ? 'Tap to follow up with this lead'
+                    : 'Tap to add notes or set a follow-up reminder',
+                  data: { lead_id: matched.id },
+                  sound: true,
+                },
+                trigger: null,
+              });
+            }
+            return;
+          }
+
+          // Still ringing: the banner is up; a local notification covers the
+          // user being outside the app.
+          await Notifications.scheduleNotificationAsync({
+            content: {
+              title: `📞 Incoming call — ${matched.name}`,
+              body: `Lead calling from ${rawNumber}`,
+              data: { lead_id: matched.id },
+              sound: true,
+            },
+            trigger: null,
+          });
         } catch (err) {
           if (__DEV__) console.warn('Lead lookup for caller failed:', err);
         }
@@ -109,6 +143,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
       // Call ended (answered → Disconnected, unanswered → Missed): always pop
       // the follow-up modal — it overlays whichever screen the user is on.
       if (event === 'Disconnected' || event === 'Missed') {
+        endedDuringLookup = event;
         const store = useCallStore.getState();
         const call = store.pendingCall;
         store.hideBanner();

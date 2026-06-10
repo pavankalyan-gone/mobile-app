@@ -27,6 +27,8 @@ export interface Lead {
 export interface LeadDetail extends Lead {
   title: string;
   description: string;
+  lost: boolean;
+  junk: boolean;
   address: string;
   city: string;
   state: string;
@@ -277,6 +279,10 @@ const translateLeadDetail = (raw: any, rest: any): LeadDetail => {
     ...baseLead,
     title: raw.title || '',
     description: raw.description || '',
+    // Perfex tracks lost/junk as separate flags, not as a status. Fall back
+    // to the status name only when the API omits the flag entirely.
+    lost: raw.lost != null ? String(raw.lost) === '1' : baseLead.status.toLowerCase().includes('lost'),
+    junk: raw.junk != null ? String(raw.junk) === '1' : baseLead.status.toLowerCase().includes('junk'),
     address: raw.address || '',
     city: raw.city || '',
     state: raw.state || '',
@@ -388,7 +394,7 @@ export const leadsService = {
     }
   },
 
-  getAll: async (params?: GetLeadsParams): Promise<{ leads: Lead[]; page: number; total: number }> => {
+  getAll: async (params?: GetLeadsParams): Promise<{ leads: Lead[]; page: number; total: number | null }> => {
     const [{ data: wrapper }, staffs] = await Promise.all([
       perfexApi.get<any>('/leads', { params }),
       leadsService.getStaffs()
@@ -408,7 +414,9 @@ export const leadsService = {
       return lead;
     });
     
-    return { leads, page: params?.page || 1, total: wrapper.total ?? raw.length };
+    // The real API returns no total count — report null rather than the page
+    // size so callers don't display "5 leads" for a 500-lead CRM.
+    return { leads, page: params?.page || 1, total: wrapper.total ?? null };
   },
 
   /**

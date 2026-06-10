@@ -27,8 +27,13 @@ export default function DashboardScreen() {
 
   const totalLeads = leadsQuery.data?.pages?.[0]?.total;
   const totalEstimates = estimatesQuery.data?.pages?.[0]?.total;
+  const loadedLeads = leadsQuery.data?.pages?.flatMap((p) => p.leads) || [];
+  // No total from the API: show the loaded count with "+" if there are more
+  const leadsCountLabel = totalLeads != null
+    ? String(totalLeads)
+    : `${loadedLeads.length}${leadsQuery.hasNextPage ? '+' : ''}`;
 
-  const leads = leadsQuery.data?.pages?.flatMap((p) => p.leads)?.slice(0, 5) || [];
+  const leads = loadedLeads.slice(0, 5);
   const estimates = estimatesQuery.data?.pages?.flatMap((p) => p.data)?.slice(0, 5) || [];
 
   const handleLogout = () => {
@@ -77,7 +82,7 @@ export default function DashboardScreen() {
             {leadsQuery.isLoading ? (
               <ActivityIndicator size="small" color={theme.colors.primary} />
             ) : (
-              <Text style={styles.cardValue}>{totalLeads ?? 0}</Text>
+              <Text style={styles.cardValue}>{leadsCountLabel}</Text>
             )}
             <Text style={styles.cardLabel}>Total Leads</Text>
           </View>

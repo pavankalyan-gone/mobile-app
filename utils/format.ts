@@ -7,7 +7,11 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
  */
 export function parseServerDate(value?: string | null): Date | null {
   if (!value) return null;
-  const iso = value.includes('T') ? value : value.replace(' ', 'T');
+  let iso = value.includes('T') ? value : value.replace(' ', 'T');
+  // Date-only strings ("2026-07-01") are parsed as UTC midnight by the spec,
+  // which renders as the previous day in UTC-negative timezones. Anchor them
+  // to local midnight to match the local-time formatters below.
+  if (!iso.includes('T')) iso += 'T00:00:00';
   const date = new Date(iso);
   return isNaN(date.getTime()) ? null : date;
 }

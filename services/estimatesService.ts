@@ -74,24 +74,23 @@ export interface PostCommentPayload {
 
 export const estimatesService = {
   getAll: async (params?: { status?: string; client_id?: number; page?: number }): Promise<EstimatesResponse> => {
-    try {
-      const { data } = await perfexApi.get<any>('/estimates', { params });
-      if (Array.isArray(data)) {
-        return { data, current_page: 1, last_page: 1, total: data.length, per_page: data.length };
-      }
-      if (data && Array.isArray(data.data)) {
-        return {
-          data: data.data,
-          current_page: data.current_page || 1,
-          last_page: data.last_page || 1,
-          total: data.total || data.data.length,
-          per_page: data.per_page || data.data.length,
-        };
-      }
-      return { data: [], current_page: 1, last_page: 1, total: 0, per_page: 0 };
-    } catch {
-      return { data: [], current_page: 1, last_page: 1, total: 0, per_page: 0 };
+    // Let request failures propagate: swallowing them caches an empty list as
+    // a successful response, so the user sees "no estimates" instead of the
+    // error/retry state and React Query's retries never engage.
+    const { data } = await perfexApi.get<any>('/estimates', { params });
+    if (Array.isArray(data)) {
+      return { data, current_page: 1, last_page: 1, total: data.length, per_page: data.length };
     }
+    if (data && Array.isArray(data.data)) {
+      return {
+        data: data.data,
+        current_page: data.current_page || 1,
+        last_page: data.last_page || 1,
+        total: data.total || data.data.length,
+        per_page: data.per_page || data.data.length,
+      };
+    }
+    return { data: [], current_page: 1, last_page: 1, total: 0, per_page: 0 };
   },
 
   getById: async (id: number): Promise<EstimateDetail> => {

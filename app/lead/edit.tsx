@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View, TouchableOpacity, Keyboard } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { TextInput, Button, HelperText, ActivityIndicator, Menu } from 'react-native-paper';
@@ -34,8 +34,13 @@ export default function EditLeadScreen() {
 
   const { data: customFields, isLoading: isLoadingCustomFields } = useLeadCustomFields('leads');
 
+  // Hydrate once per lead — background refetches (e.g. after a cache
+  // invalidation) produce a new `lead` object and must not wipe what the
+  // user is currently typing.
+  const hydratedLeadIdRef = useRef<number | null>(null);
   useEffect(() => {
-    if (lead) {
+    if (lead && hydratedLeadIdRef.current !== lead.id) {
+      hydratedLeadIdRef.current = lead.id;
       setName(lead.name || '');
       setEmail(lead.email || '');
       setPhone(lead.phone || '');
@@ -50,7 +55,7 @@ export default function EditLeadScreen() {
         setCustomFieldValues(lead.custom_field_values);
       }
     }
-  }, [lead, customFields]);
+  }, [lead]);
 
   const handleSubmit = () => {
     const trimmedName = name.trim();
@@ -70,18 +75,27 @@ export default function EditLeadScreen() {
     }
     setFormError(null);
 
+    // The hydrated map carries both slug- and id-keyed entries; the API only
+    // accepts custom_fields.leads keyed by the numeric field ID.
+    const customFieldsById = Object.fromEntries(
+      Object.entries(customFieldValues).filter(([key]) => /^\d+$/.test(key))
+    );
+
     updateLead.mutate(
       {
         id: leadId,
         payload: {
+          // The API only updates fields present in the body, so cleared
+          // fields must be sent as empty strings (and "Unassigned" as 0) —
+          // omitting them would silently keep the old values.
           name: trimmedName,
-          email: trimmedEmail || undefined,
-          phonenumber: phone.trim() || undefined,
+          email: trimmedEmail,
+          phonenumber: phone.trim(),
           lead_value: leadValue,
-          address: address.trim() || undefined,
+          address: address.trim(),
           source: sourceId || undefined,
-          assigned: assignedId || undefined,
-          custom_fields: Object.keys(customFieldValues).length > 0 ? { leads: customFieldValues } : undefined,
+          assigned: assignedId ?? 0,
+          custom_fields: Object.keys(customFieldsById).length > 0 ? { leads: customFieldsById } : undefined,
         }
       },
       {

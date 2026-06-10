@@ -84,8 +84,13 @@ export const useMarkLeadLost = () => {
     mutationFn: ({ id, lost }: { id: number; lost: boolean }) =>
       lost ? leadsService.markLost(id) : leadsService.unmarkLost(id),
     onSuccess: (_, variables) => {
+      // Write the flag into the cached detail instead of refetching it: the
+      // API's lead payload may omit lost/junk, and a refetch would reset the
+      // toggle to its status-name fallback.
+      queryClient.setQueryData<LeadDetail>(['lead', variables.id], (prev) =>
+        prev ? { ...prev, lost: variables.lost } : prev
+      );
       queryClient.invalidateQueries({ queryKey: ['leads'] });
-      queryClient.invalidateQueries({ queryKey: ['lead', variables.id] });
     },
   });
 };
@@ -96,8 +101,10 @@ export const useMarkLeadJunk = () => {
     mutationFn: ({ id, junk }: { id: number; junk: boolean }) =>
       junk ? leadsService.markJunk(id) : leadsService.unmarkJunk(id),
     onSuccess: (_, variables) => {
+      queryClient.setQueryData<LeadDetail>(['lead', variables.id], (prev) =>
+        prev ? { ...prev, junk: variables.junk } : prev
+      );
       queryClient.invalidateQueries({ queryKey: ['leads'] });
-      queryClient.invalidateQueries({ queryKey: ['lead', variables.id] });
     },
   });
 };

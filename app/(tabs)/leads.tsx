@@ -38,7 +38,8 @@ export default function LeadsScreen() {
   const { data, isLoading, isError, refetch, fetchNextPage, hasNextPage, isFetchingNextPage } = useLeads({
     search: debouncedSearch || undefined,
     status: statusFilter || undefined,
-    assigned: assignedFilter || undefined,
+    // '' means no filter; 0 is a real value ("Unassigned") and must be sent
+    assigned: assignedFilter === '' ? undefined : assignedFilter,
     source: sourceFilter || undefined,
     sort: sortFilter || undefined,
     order: sortFilter ? 'asc' : undefined,
@@ -78,6 +79,9 @@ export default function LeadsScreen() {
 
   const totalCount = data?.pages[0]?.total;
   const allLeads = data?.pages.flatMap((page) => page.leads) ?? [];
+  // The API doesn't return a total count, so fall back to what's loaded,
+  // with a "+" while more pages remain.
+  const countLabel = totalCount != null ? String(totalCount) : `${allLeads.length}${hasNextPage ? '+' : ''}`;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -85,7 +89,7 @@ export default function LeadsScreen() {
 
       <ScreenHeader
         title="Leads"
-        subtitle={`${totalCount ?? 0} Total Entries`}
+        subtitle={`${countLabel} Total Entries`}
         actions={
           <IconButton
             icon="tune"

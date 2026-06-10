@@ -55,21 +55,23 @@ export const notificationService = {
   },
 
   registerDeviceToken: async (): Promise<void> => {
-    const granted = await notificationService.requestPermission();
-    if (!granted) return;
-
-    const token = await notificationService.getExpoPushToken();
-    if (!token) return;
-
-    await SecureStore.setItemAsync(PUSH_TOKEN_KEY, token);
-
+    // Callers fire-and-forget this, so nothing here may reject — a keystore
+    // or permissions failure must not surface as an unhandled rejection.
     try {
+      const granted = await notificationService.requestPermission();
+      if (!granted) return;
+
+      const token = await notificationService.getExpoPushToken();
+      if (!token) return;
+
+      await SecureStore.setItemAsync(PUSH_TOKEN_KEY, token);
+
       await perfexApi.post('/devices/register', {
         token,
         platform: Platform.OS,
       });
     } catch (error) {
-      if (__DEV__) console.warn('Failed to register device token with backend:', error);
+      if (__DEV__) console.warn('Failed to register device token:', error);
     }
   },
 

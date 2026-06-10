@@ -107,7 +107,7 @@ export default function LeadDetailScreen() {
   };
 
   const handleMarkLost = () => {
-    const isCurrentlyLost = lead.status?.toLowerCase().includes('lost');
+    const isCurrentlyLost = lead.lost;
     Alert.alert(
       isCurrentlyLost ? 'Unmark as Lost?' : 'Mark as Lost?',
       isCurrentlyLost
@@ -124,7 +124,7 @@ export default function LeadDetailScreen() {
   };
 
   const handleMarkJunk = () => {
-    const isCurrentlyJunk = lead.status?.toLowerCase().includes('junk');
+    const isCurrentlyJunk = lead.junk;
     Alert.alert(
       isCurrentlyJunk ? 'Unmark as Junk?' : 'Mark as Junk?',
       isCurrentlyJunk
@@ -325,7 +325,10 @@ export default function LeadDetailScreen() {
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Address</Text>
               <Text style={styles.detailValue}>
-                {[lead.address, lead.city, lead.state, lead.zip, lead.country].filter(Boolean).join(', ')}
+                {/* country arrives as a numeric ID — showing it as "…, 1" helps nobody */}
+                {[lead.address, lead.city, lead.state, lead.zip, /^\d+$/.test(String(lead.country)) ? '' : lead.country]
+                  .filter(Boolean)
+                  .join(', ')}
               </Text>
             </View>
           )}
@@ -545,7 +548,7 @@ export default function LeadDetailScreen() {
           <View style={styles.actionsRow}>
             <Button
               mode="outlined"
-              icon={lead.status?.toLowerCase().includes('lost') ? "flag" : "flag-outline"}
+              icon={lead.lost ? "flag" : "flag-outline"}
               onPress={handleMarkLost}
               loading={markLostMutation.isPending}
               disabled={markLostMutation.isPending || markJunkMutation.isPending}
@@ -553,11 +556,11 @@ export default function LeadDetailScreen() {
               style={[styles.actionBtn, { borderColor: theme.colors.primary }]}
               labelStyle={styles.actionBtnLabel}
             >
-              {lead.status?.toLowerCase().includes('lost') ? 'Unmark Lost' : 'Mark Lost'}
+              {lead.lost ? 'Unmark Lost' : 'Mark Lost'}
             </Button>
             <Button
               mode="outlined"
-              icon={lead.status?.toLowerCase().includes('junk') ? "trash-can" : "trash-can-outline"}
+              icon={lead.junk ? "trash-can" : "trash-can-outline"}
               onPress={handleMarkJunk}
               loading={markJunkMutation.isPending}
               disabled={markLostMutation.isPending || markJunkMutation.isPending}
@@ -565,7 +568,7 @@ export default function LeadDetailScreen() {
               style={[styles.actionBtn, { borderColor: theme.colors.error }]}
               labelStyle={styles.actionBtnLabel}
             >
-              {lead.status?.toLowerCase().includes('junk') ? 'Unmark Junk' : 'Mark Junk'}
+              {lead.junk ? 'Unmark Junk' : 'Mark Junk'}
             </Button>
           </View>
         </View>

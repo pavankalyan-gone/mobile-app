@@ -246,10 +246,13 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
     const search = config.params?.search;
     if (search) {
       const q = search.toLowerCase();
-      filteredLeads = filteredLeads.filter(l => 
-        l.name.toLowerCase().includes(q) || 
-        l.company.toLowerCase().includes(q) || 
-        l.email.toLowerCase().includes(q)
+      const qDigits = q.replace(/\D/g, '');
+      filteredLeads = filteredLeads.filter(l =>
+        l.name.toLowerCase().includes(q) ||
+        l.company.toLowerCase().includes(q) ||
+        l.email.toLowerCase().includes(q) ||
+        // phone search (used by incoming-call lead matching) compares digits
+        (qDigits.length >= 4 && String(l.phonenumber || '').replace(/\D/g, '').includes(qDigits))
       );
     }
 
