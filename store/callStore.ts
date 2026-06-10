@@ -16,11 +16,14 @@ export interface PendingCall {
 interface CallStore {
   pendingCall: PendingCall | null;
   modalVisible: boolean;
+  /** In-app caller-ID banner shown while a known lead is ringing. */
+  bannerVisible: boolean;
   setOutgoingCall: (call: Omit<PendingCall, 'startedAt' | 'direction'>) => void;
   setIncomingCall: (call: Omit<PendingCall, 'startedAt' | 'direction'>) => void;
   clearPendingCall: () => void;
   showModal: () => void;
   dismissModal: () => void;
+  hideBanner: () => void;
 }
 
 export function isPendingCallFresh(call: PendingCall | null): call is PendingCall {
@@ -30,16 +33,23 @@ export function isPendingCallFresh(call: PendingCall | null): call is PendingCal
 export const useCallStore = create<CallStore>((set) => ({
   pendingCall: null,
   modalVisible: false,
+  bannerVisible: false,
 
   setOutgoingCall: (call) =>
     set({ pendingCall: { ...call, direction: 'outgoing', startedAt: Date.now() } }),
 
+  // An incoming call from a known lead immediately raises the caller banner
   setIncomingCall: (call) =>
-    set({ pendingCall: { ...call, direction: 'incoming', startedAt: Date.now() } }),
+    set({
+      pendingCall: { ...call, direction: 'incoming', startedAt: Date.now() },
+      bannerVisible: true,
+    }),
 
-  clearPendingCall: () => set({ pendingCall: null }),
+  clearPendingCall: () => set({ pendingCall: null, bannerVisible: false }),
 
-  showModal: () => set({ modalVisible: true }),
+  showModal: () => set({ modalVisible: true, bannerVisible: false }),
 
-  dismissModal: () => set({ modalVisible: false, pendingCall: null }),
+  dismissModal: () => set({ modalVisible: false, pendingCall: null, bannerVisible: false }),
+
+  hideBanner: () => set({ bannerVisible: false }),
 }));

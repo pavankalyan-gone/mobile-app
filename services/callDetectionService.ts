@@ -2,7 +2,9 @@ import { Platform, PermissionsAndroid } from 'react-native';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 
 // react-native-call-detection types
-type CallEventType = 'Disconnected' | 'Dialing' | 'Incoming' | 'Connected' | 'Offhook';
+// Android emits: Incoming → Offhook → Disconnected (answered)
+//            or: Incoming → Missed (not answered)
+type CallEventType = 'Disconnected' | 'Dialing' | 'Incoming' | 'Connected' | 'Offhook' | 'Missed';
 type CallListener = (event: CallEventType, phoneNumber?: string) => void;
 
 let CallDetectorInstance: any = null;

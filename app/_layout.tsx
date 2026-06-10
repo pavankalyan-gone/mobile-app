@@ -14,10 +14,10 @@ import { useCallStore, isPendingCallFresh } from '../store/callStore';
 import { ErrorBoundary } from '../components/ui/ErrorBoundary';
 import { OfflineBanner } from '../components/ui/OfflineBanner';
 import { PostCallModal } from '../components/ui/PostCallModal';
+import { IncomingCallBanner } from '../components/ui/IncomingCallBanner';
 import { startCallDetection } from '../services/callDetectionService';
 import { leadsService } from '../services/leadsService';
 import { notificationService } from '../services/notificationService';
-import { phonesMatch } from '../utils/phone';
 import { theme } from '../constants/theme';
 
 const paperTheme = {
@@ -71,17 +71,18 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
       if (event === 'Incoming' && rawNumber) {
         try {
-          const { leads } = await leadsService.getAll({ search: rawNumber, limit: 5 });
-          const matched = leads.find((l) => phonesMatch(l.phone, rawNumber));
+          // Multi-variant lookup so formatting differences can't hide a client
+          const matched = await leadsService.findByPhone(rawNumber);
 
           if (matched) {
+            // Raises the in-app caller banner on whatever screen is open
             callStore.setIncomingCall({
               leadId: matched.id,
               leadName: matched.name,
               leadPhone: rawNumber,
             });
 
-            // Fire a local notification so the user sees who is calling
+            // Local notification covers the user being outside the app
             await Notifications.scheduleNotificationAsync({
               content: {
                 title: `📞 Incoming call — ${matched.name}`,
@@ -101,13 +102,35 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
         }
       }
 
-      // When the call disconnects, show the post-call popup (if we have a fresh context)
-      if (event === 'Disconnected') {
-        const call = useCallStore.getState().pendingCall;
+      // Call ended (answered → Disconnected, unanswered → Missed): always pop
+      // the follow-up modal — it overlays whichever screen the user is on.
+      if (event === 'Disconnected' || event === 'Missed') {
+        const store = useCallStore.getState();
+        const call = store.pendingCall;
+        store.hideBanner();
+
         if (isPendingCallFresh(call)) {
-          useCallStore.getState().showModal();
+          store.showModal();
+
+          // The user is usually still outside the app right after a call —
+          // a notification brings them back to the already-open popup.
+          if (AppState.currentState !== 'active') {
+            await Notifications.scheduleNotificationAsync({
+              content: {
+                title: event === 'Missed'
+                  ? `📵 Missed call — ${call.leadName}`
+                  : `📝 Log your call with ${call.leadName}`,
+                body: event === 'Missed'
+                  ? 'Tap to follow up with this lead'
+                  : 'Tap to add notes or set a follow-up reminder',
+                data: { lead_id: call.leadId },
+                sound: true,
+              },
+              trigger: null,
+            });
+          }
         } else if (call) {
-          useCallStore.getState().clearPendingCall();
+          store.clearPendingCall();
         }
       }
     }).then((stop) => {
@@ -218,6 +241,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   return (
     <>
       {children}
+      <IncomingCallBanner />
       <PostCallModal />
     </>
   );

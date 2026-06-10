@@ -1,4 +1,5 @@
 import perfexApi from './perfexApi';
+import { normalizePhone, phonesMatch } from '../utils/phone';
 
 export interface Lead {
   id: number;
@@ -220,6 +221,29 @@ export const leadsService = {
     const raw = wrapper.data || [];
     const leads = raw.map(translateLead);
     return { leads, page: params?.page || 1, total: wrapper.total ?? raw.length };
+  },
+
+  /**
+   * Finds the lead matching a caller's phone number. The CRM's text search
+   * may miss formatted numbers ("+91 98765-43210" vs "09876543210"), so we
+   * try several variants (raw, digits-only, last 10 digits) and verify each
+   * candidate with a tolerant suffix comparison.
+   */
+  findByPhone: async (rawNumber: string): Promise<Lead | null> => {
+    const digits = normalizePhone(rawNumber);
+    const searchTerms = [rawNumber, digits, digits.slice(-10)]
+      .filter((term, i, all) => term.length >= 4 && all.indexOf(term) === i);
+
+    for (const term of searchTerms) {
+      try {
+        const { leads } = await leadsService.getAll({ search: term, limit: 10 });
+        const matched = leads.find((l) => phonesMatch(l.phone, rawNumber));
+        if (matched) return matched;
+      } catch {
+        // try the next variant — a failed search must not abort the lookup
+      }
+    }
+    return null;
   },
 
   getById: async (id: number): Promise<LeadDetail> => {
