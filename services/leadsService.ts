@@ -1,6 +1,6 @@
 import perfexApi from './perfexApi';
-import { normalizePhone, phonesMatch } from '../utils/phone';
 import { useAuthStore } from '../store/authStore';
+import { normalizePhone, phonesMatch } from '../utils/phone';
 import * as SecureStore from '../utils/secureStore';
 import { PERFEX_API_URL, PERFEX_TOKEN_KEY } from '../constants/config';
 
@@ -525,6 +525,12 @@ export const leadsService = {
   },
 
   addNote: async (id: number, description: string): Promise<{ message: string }> => {
+    // Some custom APIs fail to resolve the Bearer token user ID for core model functions.
+    // If add_note fails in the database, lazy APIs often return "Description is required".
+    // We pass the user's ID as addedfrom / staff_id to prevent database insert failures.
+    const user = useAuthStore.getState().user;
+    const staffId = user?.id || '';
+
     // Include all possible parameter names and rel_type/rel_id just in case
     const { data: wrapper } = await perfexApi.post<any>(`/lead_note/${id}`, { 
       description, 
@@ -538,9 +544,10 @@ export const leadsService = {
       lead_id: id,
       leadid: id,
       id: id,
-      // Add a dummy file object so perfexApi hasFiles=true and forces multipart/form-data
-      // This ensures the body is sent as FormData with a boundary, which might be required by the endpoint
-      dummy_file: { uri: 'file://dummy.txt', name: 'dummy.txt', type: 'text/plain' }
+      addedfrom: staffId,
+      staff_id: staffId,
+      staffid: staffId,
+      data: JSON.stringify({ description, lead_note_description: description })
     });
     return wrapper.data;
   },
