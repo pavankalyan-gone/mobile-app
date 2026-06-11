@@ -9,6 +9,9 @@ import { REMINDER_OPTIONS, formatDateForApi } from '../../utils/reminderPresets'
 import { scheduleReminderNotification } from '../../utils/reminderNotifications';
 import { addToOutbox } from '../../utils/outbox';
 import { theme } from '../../constants/theme';
+import * as SecureStore from '../../utils/secureStore';
+import { PERFEX_API_URL, PERFEX_TOKEN_KEY } from '../../constants/config';
+import perfexApi from '../../services/perfexApi';
 
 export function PostCallModal() {
   const { pendingCall, modalVisible, dismissModal } = useCallStore();
@@ -113,8 +116,9 @@ export function PostCallModal() {
         Alert.alert('Saved offline', 'You appear to be offline. This will sync automatically once you reconnect.');
         return;
       }
+      console.error('SAVE ERROR:', err?.response?.status, err?.response?.data);
       // Keep the modal (and the user's text) open so nothing is silently lost
-      setSaveError('Could not save. Check your connection and try again.');
+      setSaveError(`Error: ${err?.response?.status} - ${typeof err?.response?.data === 'string' ? err?.response?.data.slice(0, 50) : JSON.stringify(err?.response?.data)}`);
     } finally {
       setIsSaving(false);
     }

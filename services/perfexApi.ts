@@ -86,13 +86,11 @@ perfexApi.interceptors.request.use(async (config) => {
     // when a CSRF token is available; callers can opt into JSON with
     // `_bodyEncoding: 'json'`, and a 400 triggers one retry with the other
     // encoding (see the response interceptor).
-    const encoding: 'json' | 'form' =
+    const encoding: 'json' | 'form' | 'multipart' =
       (config as any)._bodyEncoding ?? (csrfTokenCache && csrfCookieStr ? 'form' : 'json');
 
     if (encoding === 'json') {
       delete data.csrf_token_name;
-      // CI3 only reads the token from $_POST, but newer stacks accept the
-      // header — harmless either way, and the cookie is already attached.
       if (csrfTokenCache) config.headers['X-CSRF-TOKEN'] = csrfTokenCache;
       config.headers['Content-Type'] = 'application/json';
       config.data = data;
@@ -125,14 +123,9 @@ perfexApi.interceptors.request.use(async (config) => {
       return parts;
     };
 
-    // If we're not sending actual files, x-www-form-urlencoded is safer in React Native
-    // as Axios sometimes drops the boundary or body for FormData without files.
     const hasFiles = Object.values(data).some(isFileLike);
 
-    if (!hasFiles) {
-      config.data = buildUrlEncoded(data).join('&');
-      config.headers['Content-Type'] = 'application/x-www-form-urlencoded';
-    } else {
+    if (encoding === 'multipart' || hasFiles) {
       const formData = new FormData();
       const appendFormData = (obj: any, prefix?: string) => {
         for (const p in obj) {
@@ -152,6 +145,9 @@ perfexApi.interceptors.request.use(async (config) => {
       if (config.headers['Content-Type']) {
         delete config.headers['Content-Type'];
       }
+    } else {
+      config.data = buildUrlEncoded(data).join('&');
+      config.headers['Content-Type'] = 'application/x-www-form-urlencoded';
     }
   } else {
     config.headers['Content-Type'] = 'application/json';
