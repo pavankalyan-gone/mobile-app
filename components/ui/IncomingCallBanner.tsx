@@ -56,7 +56,8 @@ export function IncomingCallBanner() {
     >
       <View style={styles.banner}>
         <View style={styles.iconWrapper}>
-          <MaterialCommunityIcons name="phone-incoming" size={22} color={theme.colors.primary} />
+          {/* fixed light accent circle needs a fixed dark icon color */}
+          <MaterialCommunityIcons name="phone-incoming" size={22} color="#1b300f" />
         </View>
         <View style={styles.body}>
           <Text style={styles.title} numberOfLines={1}>{pendingCall.leadName}</Text>

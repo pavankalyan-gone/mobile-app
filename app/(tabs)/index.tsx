@@ -247,11 +247,13 @@ const styles = StyleSheet.create({
   cardValue: {
     ...theme.typography.headlineLg,
     fontWeight: '700',
-    color: theme.colors.primary,
+    // The stat cards keep fixed light accent backgrounds in both schemes,
+    // so their text must stay dark (theme.colors.primary is light in dark mode)
+    color: '#1b300f',
   },
   cardLabel: {
     ...theme.typography.labelSm,
-    color: theme.colors.primary,
+    color: '#1b300f',
     opacity: 0.8,
     marginTop: theme.spacing.gapSm,
   },

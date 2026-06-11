@@ -144,7 +144,8 @@ export function PostCallModal() {
                 <MaterialCommunityIcons
                   name={isIncoming ? 'phone-incoming' : 'phone-outgoing'}
                   size={22}
-                  color={isIncoming ? '#290a21' : theme.colors.primary}
+                  // fixed light accent backgrounds need a fixed dark icon color
+                  color={isIncoming ? '#290a21' : '#1b300f'}
                 />
               </View>
               <View>

@@ -108,7 +108,8 @@ export default function LoginScreen() {
       >
         {/* Bundled brand mark instead of a hot-linked remote image */}
         <View style={styles.logoCircle}>
-          <MaterialCommunityIcons name="forest" size={64} color={theme.colors.primary} />
+          {/* fixed light accent circle needs a fixed dark icon color */}
+          <MaterialCommunityIcons name="forest" size={64} color="#1b300f" />
         </View>
         <Text style={styles.appName}>ForestCRM</Text>
         <Text style={styles.tagline}>Sign in to manage your leads and estimates</Text>

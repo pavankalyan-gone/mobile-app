@@ -1,32 +1,71 @@
+import { Appearance } from 'react-native';
+
+const lightColors = {
+  background: '#f9f9f7',
+  surface: '#ffffff', // For card backgrounds and inputs
+  surfaceDim: '#dadad8',
+  surfaceContainer: '#eeeeec',
+  surfaceContainerLow: '#f4f4f2',
+  surfaceContainerHigh: '#e8e8e6',
+  surfaceContainerHighest: '#e2e3e1',
+  onSurface: '#1a1c1b',
+  onSurfaceVariant: '#44483f',
+  inverseSurface: '#2f3130',
+  inverseOnSurface: '#f1f1ef',
+  outline: '#74796e',
+  outlineVariant: '#c4c8bc',
+  borderSubtle: '#E5E7EB',
+  primary: '#1b300f', // Forest Green
+  onPrimary: '#ffffff',
+  primaryContainer: '#1b300f',
+  onPrimaryContainer: '#809a6e',
+  secondary: '#446900',
+  onSecondary: '#ffffff',
+  secondaryContainer: '#b2f746', // Lime Green accent
+  onSecondaryContainer: '#496f00',
+  error: '#ba1a1a',
+  onError: '#ffffff',
+  errorRed: '#EF4444',
+  textMuted: '#6B7280',
+};
+
+// Material-style dark mapping of the same forest-green identity
+const darkColors: typeof lightColors = {
+  background: '#111411',
+  surface: '#1a1d1a',
+  surfaceDim: '#111411',
+  surfaceContainer: '#1e221e',
+  surfaceContainerLow: '#191c19',
+  surfaceContainerHigh: '#282c27',
+  surfaceContainerHighest: '#333733',
+  onSurface: '#e2e3df',
+  onSurfaceVariant: '#c4c8bc',
+  inverseSurface: '#e2e3df',
+  inverseOnSurface: '#2f3130',
+  outline: '#8e948a',
+  outlineVariant: '#44483f',
+  borderSubtle: '#2e3330',
+  primary: '#a4c98c', // lighter forest green for contrast on dark surfaces
+  onPrimary: '#0d1f04',
+  primaryContainer: '#324b24',
+  onPrimaryContainer: '#bfe0a6',
+  secondary: '#9fd945',
+  onSecondary: '#1f3700',
+  secondaryContainer: '#334d00',
+  onSecondaryContainer: '#b2f746',
+  error: '#ffb4ab',
+  onError: '#690005',
+  errorRed: '#f87171',
+  textMuted: '#9CA3AF',
+};
+
+// Resolved ONCE at launch: every screen freezes its StyleSheet at module load,
+// so a mid-session scheme change can't restyle them — the app picks up the
+// system preference on the next start (userInterfaceStyle is "automatic").
+export const isDarkMode = Appearance.getColorScheme() === 'dark';
+
 export const theme = {
-  colors: {
-    background: '#f9f9f7',
-    surface: '#ffffff', // For card backgrounds and inputs
-    surfaceDim: '#dadad8',
-    surfaceContainer: '#eeeeec',
-    surfaceContainerLow: '#f4f4f2',
-    surfaceContainerHigh: '#e8e8e6',
-    surfaceContainerHighest: '#e2e3e1',
-    onSurface: '#1a1c1b',
-    onSurfaceVariant: '#44483f',
-    inverseSurface: '#2f3130',
-    inverseOnSurface: '#f1f1ef',
-    outline: '#74796e',
-    outlineVariant: '#c4c8bc',
-    borderSubtle: '#E5E7EB',
-    primary: '#1b300f', // Forest Green
-    onPrimary: '#ffffff',
-    primaryContainer: '#1b300f',
-    onPrimaryContainer: '#809a6e',
-    secondary: '#446900',
-    onSecondary: '#ffffff',
-    secondaryContainer: '#b2f746', // Lime Green accent
-    onSecondaryContainer: '#496f00',
-    error: '#ba1a1a',
-    onError: '#ffffff',
-    errorRed: '#EF4444',
-    textMuted: '#6B7280',
-  },
+  colors: isDarkMode ? darkColors : lightColors,
   spacing: {
     margin: 24,
     gapLg: 32,

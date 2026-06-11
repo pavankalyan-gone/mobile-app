@@ -6,8 +6,9 @@ LogBox.ignoreLogs([
 ]);
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { PaperProvider, MD3LightTheme } from 'react-native-paper';
+import { PaperProvider, MD3LightTheme, MD3DarkTheme } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import * as Notifications from 'expo-notifications';
 import * as Updates from 'expo-updates';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -25,12 +26,13 @@ import { IncomingCallBanner } from '../components/ui/IncomingCallBanner';
 import { startCallDetection } from '../services/callDetectionService';
 import { leadsService } from '../services/leadsService';
 import { notificationService } from '../services/notificationService';
-import { theme } from '../constants/theme';
+import { theme, isDarkMode } from '../constants/theme';
 
+const paperBase = isDarkMode ? MD3DarkTheme : MD3LightTheme;
 const paperTheme = {
-  ...MD3LightTheme,
+  ...paperBase,
   colors: {
-    ...MD3LightTheme.colors,
+    ...paperBase.colors,
     primary: theme.colors.primary,
     secondary: theme.colors.secondary,
     background: theme.colors.background,
@@ -383,6 +385,7 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <QueryClientProvider client={queryClient}>
         <PaperProvider theme={paperTheme}>
+          <StatusBar style={isDarkMode ? 'light' : 'dark'} />
           <ErrorBoundary>
             <AuthGuard>
               <OfflineBanner />
