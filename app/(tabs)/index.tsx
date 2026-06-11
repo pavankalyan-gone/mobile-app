@@ -4,6 +4,7 @@ import { Text, IconButton } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { useAuthStore } from '../../store/authStore';
+import { useRecentLeadsStore } from '../../store/recentLeadsStore';
 import { useLeads } from '../../hooks/useLeads';
 import { useEstimates } from '../../hooks/useEstimates';
 import { useReminders } from '../../hooks/useReminders';
@@ -16,6 +17,7 @@ import { theme } from '../../constants/theme';
 export default function DashboardScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
+  const recentLeads = useRecentLeadsStore((s) => s.entries);
   const [refreshing, setRefreshing] = useState(false);
 
   const leadsQuery = useLeads({ limit: 5 });
@@ -126,6 +128,35 @@ export default function DashboardScreen() {
             <Text style={styles.cardLabel}>Due Today</Text>
           </View>
         </View>
+
+        {/* Recently Viewed — quick jump back to leads you just had open */}
+        {recentLeads.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Recently Viewed</Text>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.recentChipsRow}
+            >
+              {recentLeads.map((r) => (
+                <TouchableOpacity
+                  key={r.id}
+                  style={styles.recentChip}
+                  onPress={() => router.push(`/lead/${r.id}`)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open ${r.name}`}
+                >
+                  <Text style={styles.recentChipName} numberOfLines={1}>{r.name}</Text>
+                  {!!r.company && (
+                    <Text style={styles.recentChipCompany} numberOfLines={1}>{r.company}</Text>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
 
         {/* Recent Leads Section — each section owns its loading/error state */}
         <View style={styles.section}>
@@ -238,6 +269,29 @@ const styles = StyleSheet.create({
     ...theme.typography.headlineMd,
     color: theme.colors.primary,
     fontWeight: '700',
+  },
+  recentChipsRow: {
+    paddingHorizontal: theme.spacing.margin,
+    gap: 10,
+  },
+  recentChip: {
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.borderSubtle,
+    borderRadius: theme.roundness.lg,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    maxWidth: 180,
+  },
+  recentChipName: {
+    ...theme.typography.labelMd,
+    color: theme.colors.onSurface,
+    fontWeight: '700',
+  },
+  recentChipCompany: {
+    ...theme.typography.labelSm,
+    color: theme.colors.textMuted,
+    marginTop: 2,
   },
   sectionLoader: {
     paddingVertical: theme.spacing.gapMd,

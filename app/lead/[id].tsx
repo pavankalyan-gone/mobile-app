@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { View, ScrollView, StyleSheet, TouchableOpacity, TextInput, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { Text, Chip, ActivityIndicator, Menu, Button } from 'react-native-paper';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
@@ -20,6 +20,7 @@ import {
 import { useCallStore } from '../../store/callStore';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { AddReminderModal } from '../../components/ui/AddReminderModal';
+import { useRecentLeadsStore } from '../../store/recentLeadsStore';
 import { getExactStatusStyles } from '../../utils/statusColors';
 import { formatDate, formatDateTime, formatINR } from '../../utils/format';
 import { openExternal } from '../../utils/linking';
@@ -40,6 +41,12 @@ export default function LeadDetailScreen() {
   const deleteNoteMutation = useDeleteLeadNote();
   const deleteReminderMutation = useDeleteLeadReminder();
   const setOutgoingCall = useCallStore((s) => s.setOutgoingCall);
+  const recordRecent = useRecentLeadsStore((s) => s.record);
+
+  // Feed the dashboard's "Recently Viewed" strip
+  useEffect(() => {
+    if (lead) recordRecent({ id: lead.id, name: lead.name, company: lead.company });
+  }, [lead?.id]);
 
   const [menuVisible, setMenuVisible] = useState(false);
   const [noteText, setNoteText] = useState('');

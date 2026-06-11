@@ -1,8 +1,15 @@
+import { useEffect, useState } from 'react';
 import { View, StyleSheet, ScrollView, Alert } from 'react-native';
-import { Text, Button, Avatar } from 'react-native-paper';
+import { Text, Button, Avatar, Switch } from 'react-native-paper';
 import { Stack } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuthStore } from '../store/authStore';
+import {
+  canUseBiometrics,
+  getBiometricLockEnabled,
+  setBiometricLockEnabled,
+  authenticateForUnlock,
+} from '../utils/appLock';
 import { theme } from '../constants/theme';
 
 function initialsOf(name: string): string {
@@ -16,6 +23,32 @@ function initialsOf(name: string): string {
 
 export default function ProfileScreen() {
   const { user, logout } = useAuthStore();
+  const [biometricsAvailable, setBiometricsAvailable] = useState(false);
+  const [lockEnabled, setLockEnabled] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [available, enabled] = await Promise.all([canUseBiometrics(), getBiometricLockEnabled()]);
+      if (!cancelled) {
+        setBiometricsAvailable(available);
+        setLockEnabled(enabled);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleToggleLock = async (next: boolean) => {
+    if (next) {
+      // Prove the sensor works before turning the lock on
+      const ok = await authenticateForUnlock();
+      if (!ok) return;
+    }
+    setLockEnabled(next);
+    await setBiometricLockEnabled(next);
+  };
 
   const handleLogout = () => {
     Alert.alert('Sign out?', 'You will need to log in again to use the app.', [
@@ -67,6 +100,19 @@ export default function ProfileScreen() {
           <Text style={styles.emptyText}>No profile details available from the CRM.</Text>
         )}
       </View>
+
+      {biometricsAvailable && (
+        <View style={[styles.card, styles.settingsCard]}>
+          <View style={styles.row}>
+            <MaterialCommunityIcons name="fingerprint" size={20} color={theme.colors.primary} />
+            <View style={styles.rowBody}>
+              <Text style={styles.rowValue}>Biometric unlock</Text>
+              <Text style={styles.rowLabel}>Require fingerprint/face to open the app</Text>
+            </View>
+            <Switch value={lockEnabled} onValueChange={handleToggleLock} color={theme.colors.primary} />
+          </View>
+        </View>
+      )}
 
       <Button
         mode="outlined"
@@ -129,6 +175,9 @@ const styles = StyleSheet.create({
   emptyText: {
     ...theme.typography.bodyMd,
     color: theme.colors.textMuted,
+  },
+  settingsCard: {
+    marginTop: theme.spacing.gapSm,
   },
   logoutBtn: {
     marginTop: theme.spacing.gapMd,

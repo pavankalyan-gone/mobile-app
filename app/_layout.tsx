@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, ActivityIndicator, StyleSheet, AppState, AppStateStatus, LogBox } from 'react-native';
+import { View, Text, ActivityIndicator, StyleSheet, AppState, AppStateStatus, LogBox, TouchableOpacity } from 'react-native';
 
 LogBox.ignoreLogs([
   'expo-notifications: Android Push notifications',
@@ -17,6 +17,7 @@ import { useNotificationStore } from '../store/notificationStore';
 import { useCallStore, isPendingCallFresh } from '../store/callStore';
 import { useCallLogStore } from '../store/callLogStore';
 import { initOutbox } from '../utils/outbox';
+import { getBiometricLockEnabled, authenticateForUnlock } from '../utils/appLock';
 import { ErrorBoundary } from '../components/ui/ErrorBoundary';
 import { OfflineBanner } from '../components/ui/OfflineBanner';
 import { PostCallModal } from '../components/ui/PostCallModal';
@@ -53,6 +54,7 @@ const queryClient = new QueryClient({
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [locked, setLocked] = useState(false);
   const { isAuthenticated, checkAuth, logout } = useAuthStore();
   const segments = useSegments();
   const router = useRouter();
@@ -209,6 +211,28 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     };
   }, [isAuthenticated]);
 
+  // ─── Biometric app lock (cold start only, opt-in from Profile) ─────────────
+  useEffect(() => {
+    if (isCheckingAuth || !isAuthenticated) return;
+    let cancelled = false;
+    (async () => {
+      if (!(await getBiometricLockEnabled()) || cancelled) return;
+      setLocked(true);
+      const ok = await authenticateForUnlock();
+      if (!cancelled && ok) setLocked(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // run once per session, after the auth check settles
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCheckingAuth]);
+
+  const handleUnlockRetry = async () => {
+    const ok = await authenticateForUnlock();
+    if (ok) setLocked(false);
+  };
+
   // ─── Offline outbox (queued notes/reminders sync when back online) ─────────
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -311,6 +335,25 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     );
   }
 
+  if (locked) {
+    return (
+      <View style={styles.splashContainer}>
+        <MaterialCommunityIcons name="lock-outline" size={48} color={theme.colors.primary} style={styles.splashIcon} />
+        <Text style={styles.splashTitle}>ForestCRM</Text>
+        <Text style={styles.splashSubtitle}>Unlock to continue</Text>
+        <TouchableOpacity
+          style={styles.unlockBtn}
+          onPress={handleUnlockRetry}
+          accessibilityRole="button"
+          accessibilityLabel="Unlock"
+        >
+          <MaterialCommunityIcons name="fingerprint" size={20} color={theme.colors.onPrimary} />
+          <Text style={styles.unlockBtnText}>Unlock</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
     <>
       {children}
@@ -378,5 +421,20 @@ const styles = StyleSheet.create({
   },
   splashSpinnerContainer: {
     marginTop: theme.spacing.gapSm,
+  },
+  unlockBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: theme.colors.primary,
+    borderRadius: theme.roundness.xl,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    marginTop: theme.spacing.gapSm,
+  },
+  unlockBtnText: {
+    ...theme.typography.labelLg,
+    color: theme.colors.onPrimary,
+    fontWeight: '700',
   },
 });

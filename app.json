@@ -43,7 +43,13 @@
           "androidMode": "default"
         }
       ],
-      "expo-font"
+      "expo-font",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow ForestCRM to use Face ID to unlock the app."
+        }
+      ]
     ],
     "extra": {
       "eas": {
