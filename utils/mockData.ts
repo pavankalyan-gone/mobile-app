@@ -131,8 +131,8 @@ let clients: any[] = [
 ];
 
 let reminders: any[] = [
-  { id: 1, title: "Follow up: Jane Smith", due_date: "2026-06-10 09:00:00", is_read: false },
-  { id: 2, title: "Draft Proposal: Alice Johnson", due_date: "2026-06-15 15:30:00", is_read: false }
+  { id: 1, title: "Follow up: Jane Smith", due_date: "2026-06-10 09:00:00", is_read: false, rel_type: "lead", rel_id: 1 },
+  { id: 2, title: "Draft Proposal: Alice Johnson", due_date: "2026-06-15 15:30:00", is_read: false, rel_type: "lead", rel_id: 2 }
 ];
 
 const customFields = [

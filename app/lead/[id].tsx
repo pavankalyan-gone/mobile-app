@@ -19,6 +19,7 @@ import {
 } from '../../hooks/useLeads';
 import { useCallStore } from '../../store/callStore';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { AddReminderModal } from '../../components/ui/AddReminderModal';
 import { getExactStatusStyles } from '../../utils/statusColors';
 import { formatDate, formatDateTime, formatINR } from '../../utils/format';
 import { openExternal } from '../../utils/linking';
@@ -43,6 +44,7 @@ export default function LeadDetailScreen() {
   const [menuVisible, setMenuVisible] = useState(false);
   const [noteText, setNoteText] = useState('');
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
+  const [reminderModalVisible, setReminderModalVisible] = useState(false);
 
   const handleEditFeature = (feature: string) => {
     if (['Contact', 'Details', 'Custom Fields'].includes(feature)) {
@@ -53,7 +55,7 @@ export default function LeadDetailScreen() {
   };
 
   const handleCreateReminder = () => {
-    Alert.alert('Create Reminder', 'This feature is coming soon!');
+    setReminderModalVisible(true);
   };
 
   const handleDeleteReminder = (reminderId: number) => {
@@ -573,6 +575,13 @@ export default function LeadDetailScreen() {
           </View>
         </View>
         </ScrollView>
+
+        <AddReminderModal
+          visible={reminderModalVisible}
+          onDismiss={() => setReminderModalVisible(false)}
+          leadId={lead.id}
+          leadName={lead.name}
+        />
       </SafeAreaView>
     </KeyboardAvoidingView>
   );

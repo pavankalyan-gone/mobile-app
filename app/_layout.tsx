@@ -15,6 +15,8 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
 import { useCallStore, isPendingCallFresh } from '../store/callStore';
+import { useCallLogStore } from '../store/callLogStore';
+import { initOutbox } from '../utils/outbox';
 import { ErrorBoundary } from '../components/ui/ErrorBoundary';
 import { OfflineBanner } from '../components/ui/OfflineBanner';
 import { PostCallModal } from '../components/ui/PostCallModal';
@@ -105,6 +107,19 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
             // The call already ended while we were matching the number —
             // skip the banner and go straight to the follow-up popup.
             const ended = endedDuringLookup;
+            const lateCall = useCallStore.getState().pendingCall;
+            if (lateCall) {
+              useCallLogStore.getState().addEntry({
+                leadId: lateCall.leadId,
+                leadName: lateCall.leadName,
+                leadPhone: lateCall.leadPhone,
+                direction: lateCall.direction,
+                at: lateCall.startedAt,
+                durationMin: 0,
+                missed: ended === 'Missed',
+                noteSaved: false,
+              });
+            }
             useCallStore.getState().showModal();
             if (AppState.currentState !== 'active') {
               await Notifications.scheduleNotificationAsync({
@@ -149,6 +164,16 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
         store.hideBanner();
 
         if (isPendingCallFresh(call)) {
+          useCallLogStore.getState().addEntry({
+            leadId: call.leadId,
+            leadName: call.leadName,
+            leadPhone: call.leadPhone,
+            direction: call.direction,
+            at: call.startedAt,
+            durationMin: Math.max(0, Math.round((Date.now() - call.startedAt) / 60000)),
+            missed: event === 'Missed',
+            noteSaved: false,
+          });
           store.showModal();
 
           // The user is usually still outside the app right after a call —
@@ -182,6 +207,12 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
       stopDetection?.();
       stopDetection = null;
     };
+  }, [isAuthenticated]);
+
+  // ─── Offline outbox (queued notes/reminders sync when back online) ─────────
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    return initOutbox();
   }, [isAuthenticated]);
 
   // ─── AppState watcher (outgoing call fallback + iOS) ────────────────────────

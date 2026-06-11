@@ -8,9 +8,10 @@ import { ScreenHeader } from '../../components/ui/ScreenHeader';
 import { formatDate, formatDateTime, toDateKey } from '../../utils/format';
 import { theme } from '../../constants/theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 
 export default function CalendarScreen() {
+  const router = useRouter();
   const [selectedDate, setSelectedDate] = useState<string>(
     () => toDateKey(new Date().toISOString()) ?? new Date().toISOString().split('T')[0]
   );
@@ -82,21 +83,31 @@ export default function CalendarScreen() {
               </Card.Content>
             </Card>
           ) : (
-            dayReminders.map((reminder) => (
-              <Card key={reminder.id} style={styles.eventCard}>
-                <Card.Content style={styles.eventContent}>
-                  <MaterialCommunityIcons
-                    name={reminder.is_read ? 'bell-check-outline' : 'bell-outline'}
-                    size={22}
-                    color={reminder.is_read ? theme.colors.secondary : theme.colors.primary}
-                  />
-                  <View style={styles.eventBody}>
-                    <Text style={styles.eventTitle}>{reminder.title}</Text>
-                    <Text style={styles.eventSubtitle}>{formatDateTime(reminder.due_date)}</Text>
-                  </View>
-                </Card.Content>
-              </Card>
-            ))
+            dayReminders.map((reminder) => {
+              const leadId = reminder.rel_type === 'lead' && reminder.rel_id ? Number(reminder.rel_id) : null;
+              return (
+                <Card
+                  key={reminder.id}
+                  style={styles.eventCard}
+                  onPress={leadId ? () => router.push(`/lead/${leadId}`) : undefined}
+                >
+                  <Card.Content style={styles.eventContent}>
+                    <MaterialCommunityIcons
+                      name={reminder.is_read ? 'bell-check-outline' : 'bell-outline'}
+                      size={22}
+                      color={reminder.is_read ? theme.colors.secondary : theme.colors.primary}
+                    />
+                    <View style={styles.eventBody}>
+                      <Text style={styles.eventTitle}>{reminder.title}</Text>
+                      <Text style={styles.eventSubtitle}>{formatDateTime(reminder.due_date)}</Text>
+                    </View>
+                    {leadId && (
+                      <MaterialCommunityIcons name="chevron-right" size={20} color={theme.colors.textMuted} />
+                    )}
+                  </Card.Content>
+                </Card>
+              );
+            })
           )}
         </View>
       </ScrollView>

@@ -1,4 +1,5 @@
-import { ScrollView, View, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { useState, useCallback } from 'react';
+import { ScrollView, View, StyleSheet, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { Text, IconButton } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
@@ -14,11 +15,21 @@ import { theme } from '../../constants/theme';
 
 export default function DashboardScreen() {
   const router = useRouter();
-  const { user, logout } = useAuthStore();
+  const { user } = useAuthStore();
+  const [refreshing, setRefreshing] = useState(false);
 
   const leadsQuery = useLeads({ limit: 5 });
   const estimatesQuery = useEstimates();
   const remindersQuery = useReminders();
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([leadsQuery.refetch(), estimatesQuery.refetch(), remindersQuery.refetch()]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [leadsQuery.refetch, estimatesQuery.refetch, remindersQuery.refetch]);
 
   const todayKey = toDateKey(new Date().toISOString());
   const dueTodayCount = Array.isArray(remindersQuery.data)
@@ -35,13 +46,6 @@ export default function DashboardScreen() {
 
   const leads = loadedLeads.slice(0, 5);
   const estimates = estimatesQuery.data?.pages?.flatMap((p) => p.data)?.slice(0, 5) || [];
-
-  const handleLogout = () => {
-    Alert.alert('Sign out?', 'You will need to log in again to use the app.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign out', style: 'destructive', onPress: () => logout() },
-    ]);
-  };
 
   const formatTodayDate = () => {
     const date = new Date();
@@ -63,18 +67,33 @@ export default function DashboardScreen() {
         title={`Hello, ${user?.name ?? 'there'}`}
         subtitle={formatTodayDate()}
         actions={
-          <IconButton
-            icon="logout"
-            size={24}
-            iconColor={theme.colors.primary}
-            onPress={handleLogout}
-            style={styles.headerIconBtn}
-            accessibilityLabel="Sign out"
-          />
+          <>
+            <IconButton
+              icon="phone-log-outline"
+              size={24}
+              iconColor={theme.colors.primary}
+              onPress={() => router.push('/calls')}
+              style={styles.headerIconBtn}
+              accessibilityLabel="Call history"
+            />
+            <IconButton
+              icon="account-circle-outline"
+              size={24}
+              iconColor={theme.colors.primary}
+              onPress={() => router.push('/profile')}
+              style={styles.headerIconBtn}
+              accessibilityLabel="Profile"
+            />
+          </>
         }
       />
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.colors.primary} />
+        }
+      >
         {/* Summary Cards Row */}
         <View style={styles.statsRow}>
           {/* Card 1 — Total Leads */}

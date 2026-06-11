@@ -7,7 +7,9 @@ import { useNotificationStore, NotificationItem } from '../store/notificationSto
 import { EmptyState } from '../components/ui/EmptyState';
 import { theme } from '../constants/theme';
 
-function formatReceivedAt(date: Date): string {
+function formatReceivedAt(iso: string): string {
+  const date = new Date(iso);
+  if (isNaN(date.getTime())) return '';
   const diffMin = Math.round((Date.now() - date.getTime()) / 60000);
   if (diffMin < 1) return 'Just now';
   if (diffMin < 60) return `${diffMin} min ago`;

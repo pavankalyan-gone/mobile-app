@@ -1,60 +1,18 @@
-import { useState } from 'react';
-import { View, StyleSheet, TextInput, TouchableOpacity, ScrollView, Modal, KeyboardAvoidingView, Platform } from 'react-native';
+import { useState, useRef } from 'react';
+import { View, StyleSheet, TextInput, TouchableOpacity, ScrollView, Modal, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import { Text, Button, Chip } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useCallStore } from '../../store/callStore';
+import { useCallLogStore } from '../../store/callLogStore';
 import { useAddLeadNote, useAddLeadReminder } from '../../hooks/useLeads';
+import { REMINDER_OPTIONS, formatDateForApi } from '../../utils/reminderPresets';
+import { scheduleReminderNotification } from '../../utils/reminderNotifications';
+import { addToOutbox } from '../../utils/outbox';
 import { theme } from '../../constants/theme';
-
-interface ReminderOption {
-  label: string;
-  getDate: () => Date;
-}
-
-const REMINDER_OPTIONS: ReminderOption[] = [
-  {
-    label: 'In 1 hour',
-    getDate: () => {
-      const d = new Date();
-      d.setHours(d.getHours() + 1);
-      return d;
-    },
-  },
-  {
-    label: 'In 3 hours',
-    getDate: () => {
-      const d = new Date();
-      d.setHours(d.getHours() + 3);
-      return d;
-    },
-  },
-  {
-    label: 'Tomorrow 9am',
-    getDate: () => {
-      const d = new Date();
-      d.setDate(d.getDate() + 1);
-      d.setHours(9, 0, 0, 0);
-      return d;
-    },
-  },
-  {
-    label: 'Next week',
-    getDate: () => {
-      const d = new Date();
-      d.setDate(d.getDate() + 7);
-      d.setHours(9, 0, 0, 0);
-      return d;
-    },
-  },
-];
-
-function formatDateForApi(date: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:00`;
-}
 
 export function PostCallModal() {
   const { pendingCall, modalVisible, dismissModal } = useCallStore();
+  const markNoteSaved = useCallLogStore((s) => s.markNoteSaved);
   const addNote = useAddLeadNote();
   const addReminder = useAddLeadReminder();
 
@@ -63,46 +21,98 @@ export function PostCallModal() {
   const [reminderDesc, setReminderDesc] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // Survives a Retry after a partial failure, so the note isn't posted twice
+  const noteSavedRef = useRef(false);
 
   if (!modalVisible || !pendingCall) return null;
+
+  // Matches the id format used by callLogStore.addEntry in app/_layout.tsx
+  const callLogId = `${pendingCall.leadId}-${pendingCall.startedAt}`;
 
   const handleClose = () => {
     setNote('');
     setSelectedReminder(null);
     setReminderDesc('');
     setSaveError(null);
+    noteSavedRef.current = false;
     dismissModal();
+  };
+
+  /** User dismissed without saving anything — keep a minimal trace in the CRM. */
+  const handleSkip = () => {
+    const { leadId, direction, startedAt } = pendingCall;
+    const mins = startedAt ? Math.round((Date.now() - startedAt) / 60000) : 0;
+    const description = `${direction === 'incoming' ? 'Incoming' : 'Outgoing'} call${mins > 0 ? ` (~${mins} min)` : ''} — logged automatically`;
+    addNote.mutate(
+      { id: leadId, description },
+      {
+        onError: (err: any) => {
+          // Offline: queue it; otherwise drop silently — it's only an auto-log
+          if (!err?.response) addToOutbox({ kind: 'note', leadId, description, queuedAt: Date.now() });
+        },
+      }
+    );
+    handleClose();
+  };
+
+  const buildReminder = () => {
+    if (selectedReminder === null) return null;
+    return {
+      date: REMINDER_OPTIONS[selectedReminder].getDate(),
+      description: reminderDesc.trim() || `Follow up after call with ${pendingCall.leadName}`,
+    };
   };
 
   const handleSave = async () => {
     if (!note.trim() && selectedReminder === null) {
-      handleClose();
+      handleSkip();
       return;
     }
 
     setIsSaving(true);
     setSaveError(null);
-    const leadId = pendingCall.leadId;
+    const { leadId, leadName } = pendingCall;
+    const reminder = buildReminder();
 
     try {
-      if (note.trim()) {
+      if (note.trim() && !noteSavedRef.current) {
         await addNote.mutateAsync({ id: leadId, description: note.trim() });
+        noteSavedRef.current = true;
+        markNoteSaved(callLogId);
       }
 
-      if (selectedReminder !== null) {
-        const date = REMINDER_OPTIONS[selectedReminder].getDate();
-        const description = reminderDesc.trim() || `Follow up after call with ${pendingCall.leadName}`;
+      if (reminder) {
         await addReminder.mutateAsync({
           leadId,
           payload: {
-            description,
-            date: formatDateForApi(date),
+            description: reminder.description,
+            date: formatDateForApi(reminder.date),
             notify_by_email: 0,
           },
         });
+        scheduleReminderNotification({ leadId, leadName, description: reminder.description, date: reminder.date });
       }
       handleClose();
-    } catch {
+    } catch (err: any) {
+      if (!err?.response) {
+        // Offline — queue everything still unsaved and let the outbox sync it
+        if (note.trim() && !noteSavedRef.current) {
+          await addToOutbox({ kind: 'note', leadId, description: note.trim(), queuedAt: Date.now() });
+          markNoteSaved(callLogId);
+        }
+        if (reminder) {
+          await addToOutbox({
+            kind: 'reminder',
+            leadId,
+            payload: { description: reminder.description, date: formatDateForApi(reminder.date), notify_by_email: 0 },
+            queuedAt: Date.now(),
+          });
+          scheduleReminderNotification({ leadId, leadName, description: reminder.description, date: reminder.date });
+        }
+        handleClose();
+        Alert.alert('Saved offline', 'You appear to be offline. This will sync automatically once you reconnect.');
+        return;
+      }
       // Keep the modal (and the user's text) open so nothing is silently lost
       setSaveError('Could not save. Check your connection and try again.');
     } finally {
@@ -120,7 +130,7 @@ export function PostCallModal() {
       visible={modalVisible}
       transparent
       animationType="slide"
-      onRequestClose={handleClose}
+      onRequestClose={handleSkip}
     >
       <KeyboardAvoidingView
         style={styles.overlay}
@@ -148,7 +158,7 @@ export function PostCallModal() {
               </View>
             </View>
             <TouchableOpacity
-              onPress={handleClose}
+              onPress={handleSkip}
               hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
               accessibilityRole="button"
               accessibilityLabel="Close"
@@ -214,7 +224,7 @@ export function PostCallModal() {
 
           {/* Actions */}
           <View style={styles.actions}>
-            <Button mode="text" onPress={handleClose} textColor={theme.colors.textMuted}>
+            <Button mode="text" onPress={handleSkip} textColor={theme.colors.textMuted}>
               Skip
             </Button>
             <Button

@@ -4,6 +4,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import { TextInput, Button, HelperText, ActivityIndicator } from 'react-native-paper';
 import { Stack, useRouter } from 'expo-router';
 import { useCreateLead, useLeadCustomFields } from '../../hooks/useLeads';
+import { CustomFieldInput } from '../../components/ui/CustomFieldInput';
 import { theme } from '../../constants/theme';
 
 export default function NewLeadScreen() {
@@ -12,8 +13,11 @@ export default function NewLeadScreen() {
 
   const [name, setName] = useState('');
   const [company, setCompany] = useState('');
+  const [title, setTitle] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [website, setWebsite] = useState('');
+  const [address, setAddress] = useState('');
   const [value, setValue] = useState('');
   const [description, setDescription] = useState('');
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
@@ -43,8 +47,11 @@ export default function NewLeadScreen() {
       {
         name: trimmedName,
         company: company.trim() || undefined,
+        title: title.trim() || undefined,
         email: trimmedEmail || undefined,
         phonenumber: phone.trim() || undefined,
+        website: website.trim() || undefined,
+        address: address.trim() || undefined,
         lead_value: leadValue,
         description: description.trim() || undefined,
         custom_fields: Object.keys(customFieldValues).length > 0 ? { leads: customFieldValues } : undefined,
@@ -131,6 +138,42 @@ export default function NewLeadScreen() {
           maxLength={32}
         />
         <TextInput
+          label="Position / Title"
+          value={title}
+          onChangeText={setTitle}
+          mode="outlined"
+          style={styles.input}
+          outlineStyle={styles.inputOutline}
+          activeOutlineColor={theme.colors.primary}
+          theme={inputTheme}
+          maxLength={191}
+        />
+        <TextInput
+          label="Website"
+          value={website}
+          onChangeText={setWebsite}
+          keyboardType="url"
+          autoCapitalize="none"
+          autoCorrect={false}
+          mode="outlined"
+          style={styles.input}
+          outlineStyle={styles.inputOutline}
+          activeOutlineColor={theme.colors.primary}
+          theme={inputTheme}
+          maxLength={191}
+        />
+        <TextInput
+          label="Address"
+          value={address}
+          onChangeText={setAddress}
+          mode="outlined"
+          style={styles.input}
+          outlineStyle={styles.inputOutline}
+          activeOutlineColor={theme.colors.primary}
+          theme={inputTheme}
+          maxLength={191}
+        />
+        <TextInput
           label="Lead value (₹)"
           value={value}
           onChangeText={setValue}
@@ -163,22 +206,17 @@ export default function NewLeadScreen() {
         ) : customFields && customFields.length > 0 ? (
           <View style={styles.customFieldsSection}>
             {customFields.map((field) => (
-              <TextInput
+              <CustomFieldInput
                 key={field.id}
-                label={`${field.name}${field.required === '1' ? ' *' : ''}`}
+                field={field}
                 value={customFieldValues[String(field.id)] || ''}
-                onChangeText={(text) =>
+                onChange={(text) =>
                   // The API expects custom_fields.leads keyed by numeric field ID
                   setCustomFieldValues((prev) => ({ ...prev, [String(field.id)]: text }))
                 }
-                mode="outlined"
                 style={styles.input}
                 outlineStyle={styles.inputOutline}
-                activeOutlineColor={theme.colors.primary}
-                theme={inputTheme}
-                keyboardType={field.type === 'number' ? 'numeric' : 'default'}
-                multiline={field.type === 'textarea'}
-                numberOfLines={field.type === 'textarea' ? 3 : 1}
+                inputTheme={inputTheme}
               />
             ))}
           </View>

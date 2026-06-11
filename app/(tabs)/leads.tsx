@@ -5,7 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { FlashList, ListRenderItemInfo } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, Stack } from 'expo-router';
-import { useLeads, useLeadStatuses } from '../../hooks/useLeads';
+import { useLeads, useLeadStatuses, useLeadSources, useStaffs } from '../../hooks/useLeads';
 import { Lead } from '../../services/leadsService';
 import { LeadCard } from '../../components/leads/LeadCard';
 import { EmptyState } from '../../components/ui/EmptyState';
@@ -21,7 +21,10 @@ export default function LeadsScreen() {
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [assignedFilter, setAssignedFilter] = useState<number | 'me' | ''>('');
   const [sourceFilter, setSourceFilter] = useState<number | ''>('');
-  const [sortFilter, setSortFilter] = useState<'dateadded' | 'name' | 'company' | ''>('');
+  const [sortFilter, setSortFilter] = useState<'dateadded' | 'name' | 'company' | 'status' | ''>('');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  // 'active' is the API default; lost/junk leads are otherwise unreachable
+  const [viewFilter, setViewFilter] = useState<'active' | 'lost' | 'junk'>('active');
   const [refreshing, setRefreshing] = useState(false);
 
   // 400ms debounce on search input
@@ -42,14 +45,19 @@ export default function LeadsScreen() {
     assigned: assignedFilter === '' ? undefined : assignedFilter,
     source: sourceFilter || undefined,
     sort: sortFilter || undefined,
-    order: sortFilter ? 'asc' : undefined,
+    order: sortFilter ? sortOrder : undefined,
+    lost: viewFilter === 'lost' ? '1' : undefined,
+    junk: viewFilter === 'junk' ? '1' : undefined,
     limit: 20,
   });
 
   const { data: statuses } = useLeadStatuses();
+  const { data: sources } = useLeadSources();
+  const { data: staffs } = useStaffs();
 
   const hasActiveFilters =
-    search !== '' || statusFilter !== '' || assignedFilter !== '' || sourceFilter !== '' || sortFilter !== '';
+    search !== '' || statusFilter !== '' || assignedFilter !== '' || sourceFilter !== '' ||
+    sortFilter !== '' || viewFilter !== 'active';
 
   const handleClearFilters = () => {
     setSearch('');
@@ -57,6 +65,8 @@ export default function LeadsScreen() {
     setAssignedFilter('');
     setSourceFilter('');
     setSortFilter('');
+    setSortOrder('asc');
+    setViewFilter('active');
   };
 
   // Only show the pull-to-refresh spinner for user-initiated refreshes,
@@ -208,19 +218,43 @@ export default function LeadsScreen() {
               ))}
             </View>
 
+            <Text style={styles.filterSectionTitle}>Show</Text>
+            <View style={styles.filterOptions}>
+              <Chip selected={viewFilter === 'active'} onPress={() => setViewFilter('active')} style={styles.filterOptionChip}>Active</Chip>
+              <Chip selected={viewFilter === 'lost'} onPress={() => setViewFilter('lost')} style={styles.filterOptionChip}>Lost</Chip>
+              <Chip selected={viewFilter === 'junk'} onPress={() => setViewFilter('junk')} style={styles.filterOptionChip}>Junk</Chip>
+            </View>
+
             <Text style={styles.filterSectionTitle}>Assigned To</Text>
             <View style={styles.filterOptions}>
               <Chip selected={assignedFilter === ''} onPress={() => setAssignedFilter('')} style={styles.filterOptionChip}>All</Chip>
               <Chip selected={assignedFilter === 'me'} onPress={() => setAssignedFilter('me')} style={styles.filterOptionChip}>Me</Chip>
               <Chip selected={assignedFilter === 0} onPress={() => setAssignedFilter(0)} style={styles.filterOptionChip}>Unassigned</Chip>
+              {staffs?.map((s) => (
+                <Chip
+                  key={s.id}
+                  selected={assignedFilter === Number(s.id)}
+                  onPress={() => setAssignedFilter(Number(s.id))}
+                  style={styles.filterOptionChip}
+                >
+                  {s.full_name}
+                </Chip>
+              ))}
             </View>
 
             <Text style={styles.filterSectionTitle}>Source</Text>
             <View style={styles.filterOptions}>
               <Chip selected={sourceFilter === ''} onPress={() => setSourceFilter('')} style={styles.filterOptionChip}>All</Chip>
-              <Chip selected={sourceFilter === 1} onPress={() => setSourceFilter(1)} style={styles.filterOptionChip}>Organic</Chip>
-              <Chip selected={sourceFilter === 2} onPress={() => setSourceFilter(2)} style={styles.filterOptionChip}>Referral</Chip>
-              <Chip selected={sourceFilter === 3} onPress={() => setSourceFilter(3)} style={styles.filterOptionChip}>Ads</Chip>
+              {sources?.map((s) => (
+                <Chip
+                  key={s.id}
+                  selected={sourceFilter === s.id}
+                  onPress={() => setSourceFilter(s.id)}
+                  style={styles.filterOptionChip}
+                >
+                  {s.name}
+                </Chip>
+              ))}
             </View>
 
             <Text style={styles.filterSectionTitle}>Sort By</Text>
@@ -228,7 +262,18 @@ export default function LeadsScreen() {
               <Chip selected={sortFilter === ''} onPress={() => setSortFilter('')} style={styles.filterOptionChip}>Newest First</Chip>
               <Chip selected={sortFilter === 'name'} onPress={() => setSortFilter('name')} style={styles.filterOptionChip}>Name</Chip>
               <Chip selected={sortFilter === 'company'} onPress={() => setSortFilter('company')} style={styles.filterOptionChip}>Company</Chip>
+              <Chip selected={sortFilter === 'status'} onPress={() => setSortFilter('status')} style={styles.filterOptionChip}>Status</Chip>
             </View>
+
+            {sortFilter !== '' && (
+              <>
+                <Text style={styles.filterSectionTitle}>Order</Text>
+                <View style={styles.filterOptions}>
+                  <Chip selected={sortOrder === 'asc'} onPress={() => setSortOrder('asc')} style={styles.filterOptionChip}>Ascending</Chip>
+                  <Chip selected={sortOrder === 'desc'} onPress={() => setSortOrder('desc')} style={styles.filterOptionChip}>Descending</Chip>
+                </View>
+              </>
+            )}
 
             <Button mode="contained" onPress={() => setFilterModalVisible(false)} style={styles.applyFiltersBtn} buttonColor={theme.colors.primary} textColor={theme.colors.onPrimary}>
               Apply Filters

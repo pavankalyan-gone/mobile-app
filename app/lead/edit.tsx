@@ -4,6 +4,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import { TextInput, Button, HelperText, ActivityIndicator, Menu } from 'react-native-paper';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { useUpdateLead, useLead, useLeadCustomFields, useLeadSources, useStaffs } from '../../hooks/useLeads';
+import { CustomFieldInput } from '../../components/ui/CustomFieldInput';
 import { theme } from '../../constants/theme';
 
 export default function EditLeadScreen() {
@@ -320,21 +321,16 @@ export default function EditLeadScreen() {
                               customFieldValues[field.name || ''] || 
                               customFieldValues[String(field.id)] || '';
                   return (
-                    <TextInput
+                    <CustomFieldInput
                       key={field.id}
-                      label={`${field.name}${field.required === '1' ? ' *' : ''}`}
+                      field={field}
                       value={val}
-                      onChangeText={(text) =>
+                      onChange={(text) =>
                         setCustomFieldValues((prev) => ({ ...prev, [String(field.id)]: text }))
                       }
-                      mode="outlined"
                       style={styles.input}
                       outlineStyle={styles.inputOutline}
-                      activeOutlineColor={theme.colors.primary}
-                      theme={inputTheme}
-                      keyboardType={field.type === 'number' ? 'numeric' : 'default'}
-                      multiline={field.type === 'textarea'}
-                      numberOfLines={field.type === 'textarea' ? 3 : 1}
+                      inputTheme={inputTheme}
                     />
                   );
                 })}

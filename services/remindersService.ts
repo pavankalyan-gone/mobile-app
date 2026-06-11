@@ -5,6 +5,9 @@ export interface Reminder {
   title: string;
   due_date: string;
   is_read: boolean;
+  /** Present when the server relates the reminder to a record (e.g. a lead) */
+  rel_type?: string;
+  rel_id?: number | string;
 }
 
 export const remindersService = {

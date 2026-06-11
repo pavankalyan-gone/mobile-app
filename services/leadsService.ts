@@ -4,6 +4,11 @@ import { normalizePhone, phonesMatch } from '../utils/phone';
 
 const staffNameCache: Record<string, string> = {};
 
+// getAll() needs the staff list on every page, and findByPhone() runs while a
+// call is ringing — cache the request so /staffs is hit at most once per TTL.
+const STAFFS_TTL_MS = 5 * 60 * 1000;
+let staffsRequest: { at: number; promise: Promise<{ id: string | number; full_name: string }[]> } | null = null;
+
 export interface Lead {
   id: number;
   name: string;
@@ -358,24 +363,32 @@ const translateLeadDetail = (raw: any, rest: any): LeadDetail => {
 
 export const leadsService = {
   getStaffs: async (): Promise<{ id: string | number; full_name: string }[]> => {
-    try {
-      const { data: wrapper } = await perfexApi.get<any>('/staffs');
-      const raw = wrapper?.data || wrapper || [];
-      if (Array.isArray(raw)) {
-        const parsed = raw.map((s: any) => {
-          const staffId = s.staffid || s.staff_id || s.id;
-          const fullName = s.full_name || (s.firstname ? `${s.firstname} ${s.lastname || ''}`.trim() : s.name || `Staff ${staffId}`);
-          if (staffId && fullName) {
-            staffNameCache[String(staffId)] = fullName;
-          }
-          return { id: staffId, full_name: fullName };
-        });
-        return parsed;
-      }
-      return [];
-    } catch {
-      return [];
+    if (staffsRequest && Date.now() - staffsRequest.at < STAFFS_TTL_MS) {
+      return staffsRequest.promise;
     }
+    const promise = (async () => {
+      try {
+        const { data: wrapper } = await perfexApi.get<any>('/staffs');
+        const raw = wrapper?.data || wrapper || [];
+        if (Array.isArray(raw)) {
+          const parsed = raw.map((s: any) => {
+            const staffId = s.staffid || s.staff_id || s.id;
+            const fullName = s.full_name || (s.firstname ? `${s.firstname} ${s.lastname || ''}`.trim() : s.name || `Staff ${staffId}`);
+            if (staffId && fullName) {
+              staffNameCache[String(staffId)] = fullName;
+            }
+            return { id: staffId, full_name: fullName };
+          });
+          return parsed;
+        }
+        return [];
+      } catch {
+        staffsRequest = null; // failed — let the next caller retry
+        return [];
+      }
+    })();
+    staffsRequest = { at: Date.now(), promise };
+    return promise;
   },
 
   getSources: async (): Promise<{ id: number; name: string }[]> => {
