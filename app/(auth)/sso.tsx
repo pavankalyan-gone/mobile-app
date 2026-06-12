@@ -12,6 +12,7 @@ export default function SSOScreen() {
   const router = useRouter();
   const { ssoUrl } = useLocalSearchParams<{ ssoUrl: string }>();
   const [loading, setLoading] = useState(true);
+  const [webError, setWebError] = useState<string | null>(null);
   const { handleSSOLogin } = useAuthStore();
 
   const handleClose = () => {
@@ -19,6 +20,7 @@ export default function SSOScreen() {
   };
 
   const handleRedirect = async (url: string) => {
+    console.log('SSO WebView redirect detected:', url);
     // Intercept callback and process the login
     try {
       const parsed = Linking.parse(url);
@@ -38,6 +40,7 @@ export default function SSOScreen() {
 
   const handleShouldStartLoadWithRequest = (request: any) => {
     const url = request.url;
+    console.log('WebView requesting load:', url);
     if (url.startsWith('perfex-mobile://') || url.includes('/auth/callback')) {
       handleRedirect(url);
       return false; // Stop loading page in WebView
@@ -47,9 +50,24 @@ export default function SSOScreen() {
 
   const handleNavigationStateChange = (navState: any) => {
     const url = navState.url;
+    console.log('WebView navigation state change:', url, 'Loading:', navState.loading);
     if (url.startsWith('perfex-mobile://') || url.includes('/auth/callback')) {
       handleRedirect(url);
     }
+  };
+
+  const handleLoadError = (syntheticEvent: any) => {
+    const { nativeEvent } = syntheticEvent;
+    console.error('WebView load error:', nativeEvent);
+    setWebError(`Load error: ${nativeEvent.description} (${nativeEvent.code})`);
+    setLoading(false);
+  };
+
+  const handleHttpError = (syntheticEvent: any) => {
+    const { nativeEvent } = syntheticEvent;
+    console.error('WebView HTTP error:', nativeEvent);
+    setWebError(`HTTP error: ${nativeEvent.statusCode} - ${nativeEvent.description}`);
+    setLoading(false);
   };
 
   return (
@@ -67,14 +85,27 @@ export default function SSOScreen() {
           <View style={styles.errorContainer}>
             <Text style={styles.errorText}>Invalid SSO URL configuration.</Text>
           </View>
+        ) : webError ? (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{webError}</Text>
+          </View>
         ) : (
           <>
             <WebView
               source={{ uri: ssoUrl }}
               onShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
               onNavigationStateChange={handleNavigationStateChange}
-              onLoadStart={() => setLoading(true)}
-              onLoadEnd={() => setLoading(false)}
+              onLoadStart={() => {
+                console.log('WebView onLoadStart for:', ssoUrl);
+                setLoading(true);
+                setWebError(null);
+              }}
+              onLoadEnd={() => {
+                console.log('WebView onLoadEnd');
+                setLoading(false);
+              }}
+              onError={handleLoadError}
+              onHttpError={handleHttpError}
               javaScriptEnabled={true}
               domStorageEnabled={true}
               style={styles.webview}
