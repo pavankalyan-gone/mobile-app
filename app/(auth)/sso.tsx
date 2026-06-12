@@ -77,8 +77,12 @@ export default function SSOScreen() {
       handleTokenReceived(token);
     }
 
-    if (url.startsWith('perfex-mobile://') || url.startsWith('perfex-mobile:')) {
-      console.log('Final SSO redirect reached, closing WebView.');
+    if (
+      url.startsWith('perfex-mobile://') || 
+      url.startsWith('perfex-mobile:') ||
+      url.includes('/admin/')
+    ) {
+      console.log('Final SSO redirect reached (or admin dashboard), closing WebView.');
       finalizeLogin();
       return false; // Stop loading page in WebView
     }
@@ -94,7 +98,11 @@ export default function SSOScreen() {
       handleTokenReceived(token);
     }
 
-    if (url.startsWith('perfex-mobile://') || url.startsWith('perfex-mobile:')) {
+    if (
+      url.startsWith('perfex-mobile://') || 
+      url.startsWith('perfex-mobile:') ||
+      url.includes('/admin/')
+    ) {
       console.log('Final SSO redirect reached (nav state), closing WebView.');
       finalizeLogin();
     }
