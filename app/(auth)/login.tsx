@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { Text, TextInput, Button, HelperText } from 'react-native-paper';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { TouchableOpacity } from 'react-native';
@@ -16,6 +16,7 @@ WebBrowser.maybeCompleteAuthSession();
 const EMAIL_RE = /^\S+@\S+\.\S+$/;
 
 export default function LoginScreen() {
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -63,18 +64,14 @@ export default function LoginScreen() {
 
       // Use nexus_login_url if available to authenticate across both CRM and Estimator platforms
       const ssoUrl = data.data.auth.nexus_login_url || data.data.auth.sso_url;
-
-      const result = await WebBrowser.openAuthSessionAsync(ssoUrl, 'perfex-mobile://auth/callback');
-
-      if (result.type === 'success' && result.url) {
-        const urlParams = Linking.parse(result.url);
-        const token = urlParams.queryParams?.token || urlParams.queryParams?.access_token;
-        if (token) {
-          await handleSSOLogin(token as string);
-        } else {
-          throw new Error('No authentication token received from SSO.');
-        }
+      if (!ssoUrl) {
+        throw new Error('SSO login URL is not configured on the server.');
       }
+
+      router.push({
+        pathname: '/(auth)/sso',
+        params: { ssoUrl },
+      });
     } catch (err: any) {
       useAuthStore.setState({ error: err.message || 'Failed to authenticate via SSO' });
     } finally {
