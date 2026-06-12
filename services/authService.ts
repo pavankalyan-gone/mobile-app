@@ -57,9 +57,13 @@ export const authService = {
       const estimatorToken = estimatorWrapper.token;
       if (estimatorToken) {
         await SecureStore.setItemAsync(ESTIMATOR_TOKEN_KEY, estimatorToken);
+      } else {
+        throw new Error('No token returned from Estimator App login');
       }
-    } catch (err) {
+    } catch (err: any) {
+      await SecureStore.deleteItemAsync(PERFEX_TOKEN_KEY);
       if (__DEV__) console.warn('[authService] Estimator App login failed', err);
+      throw new Error(err.response?.data?.message || err.message || 'Estimator App login failed.');
     }
 
     const user = translateUser(perfexWrapper.data?.user || perfexWrapper.user, {
@@ -99,6 +103,7 @@ export const authService = {
         throw new Error('No token returned from Estimator SSO exchange');
       }
     } catch (estimatorError: any) {
+      await SecureStore.deleteItemAsync(PERFEX_TOKEN_KEY);
       if (__DEV__) console.warn('[authService] Web SSO exchange with Estimator failed', estimatorError);
       throw new Error(estimatorError?.response?.data?.error || estimatorError.message || 'Access denied. Web SSO exchange with Estimator failed.');
     }
