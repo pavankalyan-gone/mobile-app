@@ -1,7 +1,7 @@
-import perfexApi from './perfexApi';
-import estimatorApi from './estimatorApi';
+import authApi from './authApi';
 import * as SecureStore from '../utils/secureStore';
-import { PERFEX_TOKEN_KEY, ESTIMATOR_TOKEN_KEY } from '../constants/config';
+import { SSO_ACCESS_TOKEN_KEY, SSO_REFRESH_TOKEN_KEY } from '../constants/config';
+import { Platform } from 'react-native';
 
 export interface LoginPayload {
   email: string;
@@ -18,7 +18,8 @@ export interface AuthUser {
 }
 
 export interface AuthResponse {
-  perfexToken: string;
+  accessToken: string;
+  refreshToken: string;
   user: AuthUser;
 }
 
@@ -40,95 +41,54 @@ const translateUser = (raw: any, fallback: AuthUser): AuthUser => {
 
 export const authService = {
   /**
-   * Logs into the unified Perfex CRM backend.
+   * Logs into the centralized Auth System for SSO.
    */
   login: async (payload: LoginPayload): Promise<AuthResponse> => {
-    // 1. Authenticate with Perfex CRM
-    const { data: perfexWrapper } = await perfexApi.post<any>('/auth/login', payload);
-    const perfexToken: string = perfexWrapper.data?.access_token || perfexWrapper.access_token || '';
-    if (!perfexToken) {
-      throw new Error('No authentication token received from Perfex CRM.');
+    const deviceId = Platform.OS; // Use a more unique device ID in production
+    const { data: authData } = await authApi.post<any>('/auth/login', {
+      ...payload,
+      device_id: deviceId,
+    });
+    
+    const accessToken: string = authData.access_token || authData.data?.access_token || '';
+    const refreshToken: string = authData.refresh_token || authData.data?.refresh_token || '';
+    
+    if (!accessToken) {
+      throw new Error('No authentication token received from Central Auth System.');
     }
-    await SecureStore.setItemAsync(PERFEX_TOKEN_KEY, perfexToken);
-
-    // 2. Authenticate with Estimator App
-    try {
-      const { data: estimatorWrapper } = await estimatorApi.post<any>('/login', payload);
-      const estimatorToken = estimatorWrapper.token;
-      if (estimatorToken) {
-        await SecureStore.setItemAsync(ESTIMATOR_TOKEN_KEY, estimatorToken);
-      } else {
-        throw new Error('No token returned from Estimator App login');
-      }
-    } catch (err: any) {
-      await SecureStore.deleteItemAsync(PERFEX_TOKEN_KEY);
-      if (__DEV__) console.warn('[authService] Estimator App login failed', err);
-      throw new Error(err.response?.data?.message || err.message || 'Estimator App login failed.');
+    
+    await SecureStore.setItemAsync(SSO_ACCESS_TOKEN_KEY, accessToken);
+    if (refreshToken) {
+      await SecureStore.setItemAsync(SSO_REFRESH_TOKEN_KEY, refreshToken);
     }
 
-    const user = translateUser(perfexWrapper.data?.user || perfexWrapper.user, {
+    const user = translateUser(authData.user || authData.data?.user, {
       id: 0,
       name: 'User',
       email: payload.email,
       role: 'staff',
     });
 
-    return { perfexToken, user };
+    return { accessToken, refreshToken, user };
   },
 
   loginWithSSOToken: async (token: string): Promise<AuthResponse> => {
-    // 1. Exchange SSO token with Perfex CRM
-    let perfexToken = '';
-    let rawUser: any = null;
-    try {
-      const { data: exchangeData } = await perfexApi.post<any>('/auth/sso/exchange', { token });
-      perfexToken = exchangeData.data?.access_token || exchangeData.access_token || exchangeData.data?.token || exchangeData.token;
-      rawUser = exchangeData.data?.user || exchangeData.user || null;
-      if (!perfexToken) {
-        throw new Error('SSO exchange response is missing access token');
-      }
-    } catch (exchangeError: any) {
-      if (__DEV__) console.warn('[authService] Web SSO exchange with Perfex failed');
-      throw new Error(exchangeError?.response?.data?.error?.message || 'Access denied. Web SSO exchange with Perfex failed.');
-    }
-    await SecureStore.setItemAsync(PERFEX_TOKEN_KEY, perfexToken);
-
-    // 2. Exchange SSO token with Estimator App
-    try {
-      const { data: estimatorData } = await estimatorApi.get<any>(`/sso/callback?token=${token}`);
-      const estimatorToken = estimatorData?.token;
-      if (estimatorToken) {
-        await SecureStore.setItemAsync(ESTIMATOR_TOKEN_KEY, estimatorToken);
-      } else {
-        throw new Error('No token returned from Estimator SSO exchange');
-      }
-    } catch (estimatorError: any) {
-      await SecureStore.deleteItemAsync(PERFEX_TOKEN_KEY);
-      if (__DEV__) console.warn('[authService] Web SSO exchange with Estimator failed', estimatorError);
-      throw new Error(estimatorError?.response?.data?.error || estimatorError.message || 'Access denied. Web SSO exchange with Estimator failed.');
-    }
-
-    const user = translateUser(rawUser, { id: 0, name: 'CRM User', email: '', role: 'staff' });
-
-    return { perfexToken, user };
+    // Legacy SSO logic - we can still support it or adapt to new flow
+    throw new Error('SSO login flow is now handled directly through the Central Auth System');
   },
 
   logout: async (): Promise<void> => {
     try {
-      await perfexApi.post('/auth/logout');
+      const deviceId = Platform.OS;
+      await authApi.post('/auth/logout', { device_id: deviceId });
     } catch (err) {
-      if (__DEV__) console.warn('Perfex API logout failed', err);
+      if (__DEV__) console.warn('Auth System logout failed', err);
     }
-    try {
-      await estimatorApi.post('/logout');
-    } catch (err) {
-      if (__DEV__) console.warn('Estimator API logout failed', err);
-    }
-    await SecureStore.deleteItemAsync(PERFEX_TOKEN_KEY);
-    await SecureStore.deleteItemAsync(ESTIMATOR_TOKEN_KEY);
+    await SecureStore.deleteItemAsync(SSO_ACCESS_TOKEN_KEY);
+    await SecureStore.deleteItemAsync(SSO_REFRESH_TOKEN_KEY);
   },
 
-  getStoredPerfexToken: async (): Promise<string | null> => {
-    return SecureStore.getItemAsync(PERFEX_TOKEN_KEY);
+  getStoredToken: async (): Promise<string | null> => {
+    return SecureStore.getItemAsync(SSO_ACCESS_TOKEN_KEY);
   },
 };

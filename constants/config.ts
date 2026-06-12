@@ -1,7 +1,12 @@
+// Central Auth System — handles SSO login across all applications
+export const AUTH_SYSTEM_API_URL = 'https://auth.example.com/api/mobile/v1';
+
 // Perfex CRM backend — handles leads, staff auth (primary backend)
 export const PERFEX_API_URL = 'https://crm.concept2designs.in/mobile_app/api';
 
 // Separate SecureStore keys so each backend's token is stored independently
+export const SSO_ACCESS_TOKEN_KEY = 'sso_access_token';
+export const SSO_REFRESH_TOKEN_KEY = 'sso_refresh_token';
 export const PERFEX_TOKEN_KEY = 'perfex_auth_token';
 export const ESTIMATOR_TOKEN_KEY = 'estimator_auth_token';
 

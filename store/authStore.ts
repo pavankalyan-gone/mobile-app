@@ -3,7 +3,7 @@ import * as SecureStore from '../utils/secureStore';
 import { authService } from '../services/authService';
 import { notificationService } from '../services/notificationService';
 import { authEvents } from '../utils/authEvents';
-import { USER_STORAGE_KEY, ESTIMATOR_TOKEN_KEY } from '../constants/config';
+import { USER_STORAGE_KEY } from '../constants/config';
 
 interface User {
   id: number;
@@ -72,10 +72,9 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   checkAuth: async () => {
-    // Perfex CRM is the primary backend — without its token there is no session.
-    const perfexToken = await authService.getStoredPerfexToken();
-    const estimatorToken = await SecureStore.getItemAsync(ESTIMATOR_TOKEN_KEY);
-    if (!perfexToken || !estimatorToken) {
+    // Check for the central SSO access token
+    const ssoToken = await authService.getStoredToken();
+    if (!ssoToken) {
       set({ user: null, isAuthenticated: false });
       return;
     }
@@ -95,6 +94,8 @@ export const useAuthStore = create<AuthState>((set) => ({
 // The API layer emits this when the primary backend rejects the token (401).
 authEvents.onUnauthorized(() => {
   SecureStore.deleteItemAsync(USER_STORAGE_KEY).catch(() => {});
+  SecureStore.deleteItemAsync('sso_access_token').catch(() => {});
+  SecureStore.deleteItemAsync('sso_refresh_token').catch(() => {});
   useAuthStore.setState({
     user: null,
     isAuthenticated: false,

@@ -1,6 +1,7 @@
 import axios from 'axios';
 import * as SecureStore from '../utils/secureStore';
-import { ESTIMATOR_API_URL, ESTIMATOR_TOKEN_KEY } from '../constants/config';
+import { ESTIMATOR_API_URL, SSO_ACCESS_TOKEN_KEY } from '../constants/config';
+import { authEvents } from '../utils/authEvents';
 
 const estimatorApi = axios.create({
   baseURL: ESTIMATOR_API_URL,
@@ -12,7 +13,7 @@ const estimatorApi = axios.create({
 });
 
 estimatorApi.interceptors.request.use(async (config) => {
-  const token = await SecureStore.getItemAsync(ESTIMATOR_TOKEN_KEY);
+  const token = await SecureStore.getItemAsync(SSO_ACCESS_TOKEN_KEY);
   
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -20,5 +21,15 @@ estimatorApi.interceptors.request.use(async (config) => {
   
   return config;
 });
+
+estimatorApi.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      authEvents.emitUnauthorized();
+    }
+    return Promise.reject(error);
+  }
+);
 
 export default estimatorApi;
