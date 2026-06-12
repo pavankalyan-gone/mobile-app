@@ -52,15 +52,6 @@ export default function SSOScreen() {
     }
   };
 
-  if (!ssoUrl) {
-    return (
-      <SafeAreaView style={styles.errorContainer}>
-        <Text style={styles.errorText}>Invalid SSO URL configuration.</Text>
-        <Appbar.BackAction onPress={handleClose} />
-      </SafeAreaView>
-    );
-  }
-
   return (
     <SafeAreaView style={styles.safeArea}>
       <Appbar.Header style={styles.header} statusBarHeight={0}>
@@ -72,22 +63,30 @@ export default function SSOScreen() {
       </Appbar.Header>
 
       <View style={styles.container}>
-        <WebView
-          source={{ uri: ssoUrl }}
-          onShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
-          onNavigationStateChange={handleNavigationStateChange}
-          onLoadStart={() => setLoading(true)}
-          onLoadEnd={() => setLoading(false)}
-          javaScriptEnabled={true}
-          domStorageEnabled={true}
-          style={styles.webview}
-        />
-
-        {loading && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={theme.colors.primary} />
-            <Text style={styles.loadingText}>Loading secure portal...</Text>
+        {!ssoUrl ? (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>Invalid SSO URL configuration.</Text>
           </View>
+        ) : (
+          <>
+            <WebView
+              source={{ uri: ssoUrl }}
+              onShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
+              onNavigationStateChange={handleNavigationStateChange}
+              onLoadStart={() => setLoading(true)}
+              onLoadEnd={() => setLoading(false)}
+              javaScriptEnabled={true}
+              domStorageEnabled={true}
+              style={styles.webview}
+            />
+
+            {loading && (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={theme.colors.primary} />
+                <Text style={styles.loadingText}>Loading secure portal...</Text>
+              </View>
+            )}
+          </>
         )}
       </View>
     </SafeAreaView>
