@@ -1,6 +1,6 @@
 import axios from 'axios';
 import * as SecureStore from '../utils/secureStore';
-import { PERFEX_API_URL, SSO_ACCESS_TOKEN_KEY, MOCK_MODE } from '../constants/config';
+import { PERFEX_API_URL, SSO_ACCESS_TOKEN_KEY, PERFEX_TOKEN_KEY, MOCK_MODE } from '../constants/config';
 import { authEvents } from '../utils/authEvents';
 
 const perfexApi = axios.create({
@@ -44,7 +44,10 @@ const fetchCsrfToken = async () => {
 };
 
 perfexApi.interceptors.request.use(async (config) => {
-  const token = await SecureStore.getItemAsync(SSO_ACCESS_TOKEN_KEY);
+  let token = await SecureStore.getItemAsync(PERFEX_TOKEN_KEY);
+  if (!token) {
+    token = await SecureStore.getItemAsync(SSO_ACCESS_TOKEN_KEY);
+  }
   if (token) config.headers.Authorization = `Bearer ${token}`;
 
   // If method is POST/PUT/PATCH/DELETE, bypass CodeIgniter CSRF by attaching the token

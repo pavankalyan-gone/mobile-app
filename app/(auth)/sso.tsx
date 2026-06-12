@@ -33,18 +33,39 @@ export default function SSOScreen() {
     return match ? match[1] : null;
   };
 
-  const handleRedirectWithToken = async (token: string) => {
-    console.log('JWT Token successfully extracted, initiating SSO login...');
+  const handleTokenReceived = async (token: string) => {
+    console.log('JWT Token successfully extracted, saving silently...');
     try {
-      // Go back to login screen first to prevent UI transition issues
-      router.back();
-      // Trigger handleSSOLogin with the extracted JWT token
-      await handleSSOLogin(token);
+      const { jwtDecode } = require('jwt-decode');
+      const decoded = jwtDecode(token) as any;
+      const SecureStore = require('expo-secure-store');
+      
+      if (decoded.aud && decoded.aud.includes('estimator')) {
+        await SecureStore.setItemAsync('estimator_auth_token', token);
+        console.log('[SSO] Saved Estimator specific token');
+      } else if (decoded.aud && decoded.aud.includes('crm')) {
+        await SecureStore.setItemAsync('perfex_auth_token', token);
+        console.log('[SSO] Saved CRM specific token');
+      }
+      await SecureStore.setItemAsync('sso_access_token', token);
     } catch (err: any) {
-      if (__DEV__) console.warn('SSO callback processing failed:', err);
-      useAuthStore.setState({ error: err.message || 'Failed to authenticate via SSO' });
-      router.back();
+      console.warn('Silent token save failed', err);
     }
+  };
+
+  const finalizeLogin = async () => {
+    try {
+      const SecureStore = require('expo-secure-store');
+      const primaryToken = await SecureStore.getItemAsync('perfex_auth_token') || await SecureStore.getItemAsync('sso_access_token');
+      if (primaryToken) {
+        await handleSSOLogin(primaryToken);
+      } else {
+        throw new Error("No tokens were successfully saved during SSO.");
+      }
+    } catch (err: any) {
+      useAuthStore.setState({ error: err.message || 'Failed to finalize SSO login' });
+    }
+    router.back();
   };
 
   const handleShouldStartLoadWithRequest = (request: any) => {
@@ -53,11 +74,12 @@ export default function SSOScreen() {
     
     const token = extractTokenFromUrl(url);
     if (token) {
-      handleRedirectWithToken(token);
-      return false; // Stop loading page in WebView
+      handleTokenReceived(token);
     }
 
     if (url.startsWith('perfex-mobile://') || url.startsWith('perfex-mobile:')) {
+      console.log('Final SSO redirect reached, closing WebView.');
+      finalizeLogin();
       return false; // Stop loading page in WebView
     }
     return true; // Continue loading
@@ -69,7 +91,12 @@ export default function SSOScreen() {
     
     const token = extractTokenFromUrl(url);
     if (token) {
-      handleRedirectWithToken(token);
+      handleTokenReceived(token);
+    }
+
+    if (url.startsWith('perfex-mobile://') || url.startsWith('perfex-mobile:')) {
+      console.log('Final SSO redirect reached (nav state), closing WebView.');
+      finalizeLogin();
     }
   };
 

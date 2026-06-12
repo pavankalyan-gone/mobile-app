@@ -96,6 +96,8 @@ authEvents.onUnauthorized(() => {
   SecureStore.deleteItemAsync(USER_STORAGE_KEY).catch(() => {});
   SecureStore.deleteItemAsync('sso_access_token').catch(() => {});
   SecureStore.deleteItemAsync('sso_refresh_token').catch(() => {});
+  SecureStore.deleteItemAsync('perfex_auth_token').catch(() => {});
+  SecureStore.deleteItemAsync('estimator_auth_token').catch(() => {});
   useAuthStore.setState({
     user: null,
     isAuthenticated: false,

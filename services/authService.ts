@@ -1,6 +1,6 @@
 import authApi from './authApi';
 import * as SecureStore from '../utils/secureStore';
-import { SSO_ACCESS_TOKEN_KEY, SSO_REFRESH_TOKEN_KEY } from '../constants/config';
+import { SSO_ACCESS_TOKEN_KEY, SSO_REFRESH_TOKEN_KEY, ESTIMATOR_TOKEN_KEY, PERFEX_TOKEN_KEY } from '../constants/config';
 import { Platform } from 'react-native';
 
 export interface LoginPayload {
@@ -73,8 +73,45 @@ export const authService = {
   },
 
   loginWithSSOToken: async (token: string): Promise<AuthResponse> => {
-    // Legacy SSO logic - we can still support it or adapt to new flow
-    throw new Error('SSO login flow is now handled directly through the Central Auth System');
+    // Save as fallback
+    await SecureStore.setItemAsync(SSO_ACCESS_TOKEN_KEY, token);
+
+    let user: AuthUser = {
+      id: 0,
+      name: 'User',
+      email: '',
+      role: 'staff',
+    };
+
+    try {
+      const { jwtDecode } = require('jwt-decode');
+      const decoded = jwtDecode(token) as any;
+      
+      // Save token to correct specific storage based on token audience
+      if (decoded.aud && decoded.aud.includes('estimator')) {
+        await SecureStore.setItemAsync(ESTIMATOR_TOKEN_KEY, token);
+        console.log('[AuthService] Saved Estimator specific token');
+      } else if (decoded.aud && decoded.aud.includes('crm')) {
+        await SecureStore.setItemAsync(PERFEX_TOKEN_KEY, token);
+        console.log('[AuthService] Saved CRM specific token');
+      }
+
+      user = translateUser({
+        id: decoded.sub,
+        email: decoded.email,
+        name: decoded.name,
+        role: decoded.role,
+        ...decoded
+      }, user);
+    } catch (e) {
+      console.warn('Failed to decode SSO JWT token', e);
+    }
+
+    return {
+      accessToken: token,
+      refreshToken: '', // Refresh token might not be provided in the initial SSO callback
+      user,
+    };
   },
 
   logout: async (): Promise<void> => {
@@ -86,6 +123,8 @@ export const authService = {
     }
     await SecureStore.deleteItemAsync(SSO_ACCESS_TOKEN_KEY);
     await SecureStore.deleteItemAsync(SSO_REFRESH_TOKEN_KEY);
+    await SecureStore.deleteItemAsync(ESTIMATOR_TOKEN_KEY);
+    await SecureStore.deleteItemAsync(PERFEX_TOKEN_KEY);
   },
 
   getStoredToken: async (): Promise<string | null> => {
