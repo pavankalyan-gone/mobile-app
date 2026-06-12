@@ -41,7 +41,7 @@ export default function SSOScreen() {
   const handleShouldStartLoadWithRequest = (request: any) => {
     const url = request.url;
     console.log('WebView requesting load:', url);
-    if (url.startsWith('perfex-mobile://') || url.includes('/auth/callback')) {
+    if (url.startsWith('perfex-mobile://') || url.startsWith('perfex-mobile:')) {
       handleRedirect(url);
       return false; // Stop loading page in WebView
     }
@@ -51,7 +51,7 @@ export default function SSOScreen() {
   const handleNavigationStateChange = (navState: any) => {
     const url = navState.url;
     console.log('WebView navigation state change:', url, 'Loading:', navState.loading);
-    if (url.startsWith('perfex-mobile://') || url.includes('/auth/callback')) {
+    if (url.startsWith('perfex-mobile://') || url.startsWith('perfex-mobile:')) {
       handleRedirect(url);
     }
   };
