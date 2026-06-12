@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, ActivityIndicator, SafeAreaView } from 'react-native';
+import { StyleSheet, View, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Appbar, Text } from 'react-native-paper';
