@@ -19,18 +19,27 @@ export default function SSOScreen() {
     router.back();
   };
 
-  const handleRedirect = async (url: string) => {
-    console.log('SSO WebView redirect detected:', url);
-    // Intercept callback and process the login
+  const extractTokenFromUrl = (url: string): string | null => {
     try {
       const parsed = Linking.parse(url);
       const token = parsed.queryParams?.token || parsed.queryParams?.access_token;
-      if (token) {
-        // Go back to login screen first to prevent UI transition issues
-        router.back();
-        // Trigger handleSSOLogin with the extracted JWT token
-        await handleSSOLogin(token as string);
+      if (token && typeof token === 'string' && token.startsWith('eyJ')) {
+        return token;
       }
+    } catch {}
+
+    // Fallback regex matching for safety
+    const match = url.match(/[?&](?:token|access_token)=(eyJ[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+)/);
+    return match ? match[1] : null;
+  };
+
+  const handleRedirectWithToken = async (token: string) => {
+    console.log('JWT Token successfully extracted, initiating SSO login...');
+    try {
+      // Go back to login screen first to prevent UI transition issues
+      router.back();
+      // Trigger handleSSOLogin with the extracted JWT token
+      await handleSSOLogin(token);
     } catch (err: any) {
       if (__DEV__) console.warn('SSO callback processing failed:', err);
       useAuthStore.setState({ error: err.message || 'Failed to authenticate via SSO' });
@@ -41,8 +50,14 @@ export default function SSOScreen() {
   const handleShouldStartLoadWithRequest = (request: any) => {
     const url = request.url;
     console.log('WebView requesting load:', url);
+    
+    const token = extractTokenFromUrl(url);
+    if (token) {
+      handleRedirectWithToken(token);
+      return false; // Stop loading page in WebView
+    }
+
     if (url.startsWith('perfex-mobile://') || url.startsWith('perfex-mobile:')) {
-      handleRedirect(url);
       return false; // Stop loading page in WebView
     }
     return true; // Continue loading
@@ -51,8 +66,10 @@ export default function SSOScreen() {
   const handleNavigationStateChange = (navState: any) => {
     const url = navState.url;
     console.log('WebView navigation state change:', url, 'Loading:', navState.loading);
-    if (url.startsWith('perfex-mobile://') || url.startsWith('perfex-mobile:')) {
-      handleRedirect(url);
+    
+    const token = extractTokenFromUrl(url);
+    if (token) {
+      handleRedirectWithToken(token);
     }
   };
 
