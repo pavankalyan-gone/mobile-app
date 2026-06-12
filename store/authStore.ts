@@ -3,7 +3,7 @@ import * as SecureStore from '../utils/secureStore';
 import { authService } from '../services/authService';
 import { notificationService } from '../services/notificationService';
 import { authEvents } from '../utils/authEvents';
-import { USER_STORAGE_KEY } from '../constants/config';
+import { USER_STORAGE_KEY, ESTIMATOR_TOKEN_KEY } from '../constants/config';
 
 interface User {
   id: number;
@@ -74,7 +74,8 @@ export const useAuthStore = create<AuthState>((set) => ({
   checkAuth: async () => {
     // Perfex CRM is the primary backend — without its token there is no session.
     const perfexToken = await authService.getStoredPerfexToken();
-    if (!perfexToken) {
+    const estimatorToken = await SecureStore.getItemAsync(ESTIMATOR_TOKEN_KEY);
+    if (!perfexToken || !estimatorToken) {
       set({ user: null, isAuthenticated: false });
       return;
     }

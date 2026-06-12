@@ -26,12 +26,24 @@ export default function EstimatesScreen() {
   const [statusFilter, setStatusFilter] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
-  const { data, isLoading, isError, refetch, fetchNextPage, hasNextPage, isFetchingNextPage } = useEstimates({
+  const { data, isLoading, isError, error, refetch, fetchNextPage, hasNextPage, isFetchingNextPage } = useEstimates({
     status: statusFilter || undefined,
   });
 
   const totalCount = data?.pages[0]?.total;
   const allEstimates = data?.pages.flatMap((page) => page.data) ?? [];
+
+  const getErrorMessage = () => {
+    if (!error) return 'Check your connection and try again';
+    const err: any = error;
+    if (err.response?.data?.message) {
+      return `Server Error: ${err.response.data.message}`;
+    }
+    if (err.response?.data?.error) {
+      return `Server Error: ${err.response.data.error}`;
+    }
+    return err.message || 'Check your connection and try again';
+  };
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -109,7 +121,7 @@ export default function EstimatesScreen() {
               <EmptyState
                 icon="wifi-off"
                 title="Couldn't load estimates"
-                subtitle="Check your connection and try again"
+                subtitle={getErrorMessage()}
                 buttonText="Retry"
                 onPressButton={() => refetch()}
               />

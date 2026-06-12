@@ -166,7 +166,7 @@ const parseConfigData = (data: any) => {
       return JSON.parse(data);
     } catch {
       const searchParams = new URLSearchParams(data);
-      return Object.fromEntries(searchParams.entries());
+      return Object.fromEntries((searchParams as any).entries());
     }
   }
   return data;
@@ -371,7 +371,7 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
         body = JSON.parse(config.data);
       } catch {
         const searchParams = new URLSearchParams(config.data);
-        body = Object.fromEntries(searchParams.entries());
+        body = Object.fromEntries((searchParams as any).entries());
       }
     } else {
       body = config.data;

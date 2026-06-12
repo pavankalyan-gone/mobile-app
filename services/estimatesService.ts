@@ -1,4 +1,4 @@
-import perfexApi from './perfexApi';
+import estimatorApi from './estimatorApi';
 
 export type EstimateStatus =
   | 'draft'
@@ -77,59 +77,95 @@ export const estimatesService = {
     // Let request failures propagate: swallowing them caches an empty list as
     // a successful response, so the user sees "no estimates" instead of the
     // error/retry state and React Query's retries never engage.
-    const { data } = await perfexApi.get<any>('/estimates', { params });
-    if (Array.isArray(data)) {
-      return { data, current_page: 1, last_page: 1, total: data.length, per_page: data.length };
+    try {
+      console.log('[EstimatesService] Requesting estimates with params:', params);
+      const { data } = await estimatorApi.get<any>('/estimates', { params });
+      console.log('[EstimatesService] Received estimates response:', JSON.stringify(data).slice(0, 500));
+      if (Array.isArray(data)) {
+        return { data, current_page: 1, last_page: 1, total: data.length, per_page: data.length };
+      }
+      if (data && Array.isArray(data.estimates)) {
+        const total = data.total ?? data.estimates.length;
+        const limit = 20;
+        const lastPage = Math.max(1, Math.ceil(total / limit));
+        const currentPage = params?.page ?? 1;
+        return {
+          data: data.estimates,
+          current_page: currentPage,
+          last_page: lastPage,
+          total: total,
+          per_page: limit,
+        };
+      }
+      if (data && Array.isArray(data.data)) {
+        return {
+          data: data.data,
+          current_page: data.current_page || 1,
+          last_page: data.last_page || 1,
+          total: data.total || data.data.length,
+          per_page: data.per_page || data.data.length,
+        };
+      }
+      console.warn('[EstimatesService] Estimates response had unrecognized format, returning empty array.');
+      return { data: [], current_page: 1, last_page: 1, total: 0, per_page: 0 };
+    } catch (err: any) {
+      console.error('[EstimatesService] getAll estimates error:', {
+        message: err.message,
+        status: err.response?.status,
+        data: err.response?.data
+      });
+      throw err;
     }
-    if (data && Array.isArray(data.data)) {
-      return {
-        data: data.data,
-        current_page: data.current_page || 1,
-        last_page: data.last_page || 1,
-        total: data.total || data.data.length,
-        per_page: data.per_page || data.data.length,
-      };
-    }
-    return { data: [], current_page: 1, last_page: 1, total: 0, per_page: 0 };
   },
 
   getById: async (id: number): Promise<EstimateDetail> => {
-    const { data } = await perfexApi.get(`/estimates/${id}`);
-    return data as EstimateDetail;
+    try {
+      console.log(`[EstimatesService] Requesting estimate detail for ID: ${id}`);
+      const { data } = await estimatorApi.get(`/estimates/${id}`);
+      console.log(`[EstimatesService] Received estimate detail response for ID: ${id}:`, JSON.stringify(data).slice(0, 500));
+      return data as EstimateDetail;
+    } catch (err: any) {
+      console.error(`[EstimatesService] getById estimate details error for ID: ${id}:`, {
+        message: err.message,
+        status: err.response?.status,
+        data: err.response?.data
+      });
+      throw err;
+    }
   },
 
   send: async (id: number) => {
-    const { data } = await perfexApi.post(`/estimates/${id}/send`);
+    const { data } = await estimatorApi.post(`/estimates/${id}/send`);
     return data as { success: boolean; message: string };
   },
 
   markAs: async (id: number, status: EstimateStatus) => {
-    const { data } = await perfexApi.post(`/estimates/${id}/mark-as/${status}`);
+    const { data } = await estimatorApi.post(`/estimates/${id}/mark-as/${status}`);
     return data as { success: boolean; new_status: string; message: string };
   },
 
   submit: async (id: number) => {
-    const { data } = await perfexApi.post(`/estimates/${id}/submit`);
+    const { data } = await estimatorApi.post(`/estimates/${id}/submit`);
     return data as { success: boolean; message: string };
   },
 
   approve: async (id: number) => {
-    const { data } = await perfexApi.post(`/estimates/${id}/approve`);
+    const { data } = await estimatorApi.post(`/estimates/${id}/approve`);
     return data as { success: boolean; message: string };
   },
 
   reject: async (id: number, reason: string) => {
-    const { data } = await perfexApi.post(`/estimates/${id}/reject`, { reason });
+    const { data } = await estimatorApi.post(`/estimates/${id}/reject`, { reason });
     return data as { success: boolean; message: string };
   },
 
   listComments: async (id: number) => {
-    const { data } = await perfexApi.get(`/estimates/${id}/comments`);
+    const { data } = await estimatorApi.get(`/estimates/${id}/comments`);
     return data as Comment[];
   },
 
   postComment: async (id: number, payload: PostCommentPayload) => {
-    const { data } = await perfexApi.post(`/estimates/${id}/comments`, payload);
+    const { data } = await estimatorApi.post(`/estimates/${id}/comments`, payload);
     return data as { success: boolean; comment: Comment };
   },
 };

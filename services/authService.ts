@@ -1,6 +1,7 @@
 import perfexApi from './perfexApi';
+import estimatorApi from './estimatorApi';
 import * as SecureStore from '../utils/secureStore';
-import { PERFEX_TOKEN_KEY } from '../constants/config';
+import { PERFEX_TOKEN_KEY, ESTIMATOR_TOKEN_KEY } from '../constants/config';
 
 export interface LoginPayload {
   email: string;
@@ -50,6 +51,17 @@ export const authService = {
     }
     await SecureStore.setItemAsync(PERFEX_TOKEN_KEY, perfexToken);
 
+    // 2. Authenticate with Estimator App
+    try {
+      const { data: estimatorWrapper } = await estimatorApi.post<any>('/login', payload);
+      const estimatorToken = estimatorWrapper.token;
+      if (estimatorToken) {
+        await SecureStore.setItemAsync(ESTIMATOR_TOKEN_KEY, estimatorToken);
+      }
+    } catch (err) {
+      if (__DEV__) console.warn('[authService] Estimator App login failed', err);
+    }
+
     const user = translateUser(perfexWrapper.data?.user || perfexWrapper.user, {
       id: 0,
       name: 'User',
@@ -77,6 +89,20 @@ export const authService = {
     }
     await SecureStore.setItemAsync(PERFEX_TOKEN_KEY, perfexToken);
 
+    // 2. Exchange SSO token with Estimator App
+    try {
+      const { data: estimatorData } = await estimatorApi.get<any>(`/sso/callback?token=${token}`);
+      const estimatorToken = estimatorData?.token;
+      if (estimatorToken) {
+        await SecureStore.setItemAsync(ESTIMATOR_TOKEN_KEY, estimatorToken);
+      } else {
+        throw new Error('No token returned from Estimator SSO exchange');
+      }
+    } catch (estimatorError: any) {
+      if (__DEV__) console.warn('[authService] Web SSO exchange with Estimator failed', estimatorError);
+      throw new Error(estimatorError?.response?.data?.error || estimatorError.message || 'Access denied. Web SSO exchange with Estimator failed.');
+    }
+
     const user = translateUser(rawUser, { id: 0, name: 'CRM User', email: '', role: 'staff' });
 
     return { perfexToken, user };
@@ -88,7 +114,13 @@ export const authService = {
     } catch (err) {
       if (__DEV__) console.warn('Perfex API logout failed', err);
     }
+    try {
+      await estimatorApi.post('/logout');
+    } catch (err) {
+      if (__DEV__) console.warn('Estimator API logout failed', err);
+    }
     await SecureStore.deleteItemAsync(PERFEX_TOKEN_KEY);
+    await SecureStore.deleteItemAsync(ESTIMATOR_TOKEN_KEY);
   },
 
   getStoredPerfexToken: async (): Promise<string | null> => {
